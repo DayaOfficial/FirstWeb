@@ -1,0 +1,208 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Users, CheckCircle2, XCircle, Clock, Search, UserCheck, UserX } from 'lucide-react';
+import { formatDate } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+
+interface UserData {
+  id: string;
+  username: string;
+  email: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+export default function OwnerUserPage() {
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = () => {
+    const stored = JSON.parse(localStorage.getItem('daya_users') || '[]');
+    setUsers(stored);
+  };
+
+  const updateUserStatus = (userId: string, newStatus: 'approved' | 'rejected') => {
+    const stored: UserData[] = JSON.parse(localStorage.getItem('daya_users') || '[]');
+    const updated = stored.map(u => u.id === userId ? { ...u, status: newStatus } : u);
+    localStorage.setItem('daya_users', JSON.stringify(updated));
+    setUsers(updated);
+
+    // Update notifications
+    const notifications = JSON.parse(localStorage.getItem('daya_notifications') || '[]');
+    const updatedNotifs = notifications.map((n: { userId?: string; isRead: boolean }) =>
+      n.userId === userId ? { ...n, isRead: true } : n
+    );
+    localStorage.setItem('daya_notifications', JSON.stringify(updatedNotifs));
+  };
+
+  const filtered = users.filter(u => {
+    const matchFilter = filter === 'all' || u.status === filter;
+    const matchSearch = u.username.toLowerCase().includes(search.toLowerCase()) ||
+                        u.email.toLowerCase().includes(search.toLowerCase());
+    return matchFilter && matchSearch;
+  });
+
+  const pendingCount = users.filter(u => u.status === 'pending').length;
+  const approvedCount = users.filter(u => u.status === 'approved').length;
+  const rejectedCount = users.filter(u => u.status === 'rejected').length;
+
+  const statusConfig = {
+    pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
+    approved: { label: 'Disetujui', color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 },
+    rejected: { label: 'Ditolak', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl lg:text-3xl font-bold text-on-surface tracking-tight font-[family-name:var(--font-heading)] flex items-center gap-3">
+          <Users size={28} className="text-primary" />
+          Manajemen User
+        </h2>
+        <p className="text-sm text-on-surface-variant mt-1">Kelola akun pengguna dan persetujuan registrasi.</p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-surface-container-lowest rounded-xl p-5 shadow-soft border border-outline-variant/20">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-100 text-amber-600 rounded-lg"><Clock size={20} /></div>
+            <div>
+              <p className="text-xs text-on-surface-variant">Menunggu Approval</p>
+              <p className="text-xl font-bold text-on-surface font-[family-name:var(--font-heading)]">{pendingCount}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-surface-container-lowest rounded-xl p-5 shadow-soft border border-outline-variant/20">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-100 text-green-600 rounded-lg"><CheckCircle2 size={20} /></div>
+            <div>
+              <p className="text-xs text-on-surface-variant">Disetujui</p>
+              <p className="text-xl font-bold text-on-surface font-[family-name:var(--font-heading)]">{approvedCount}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-surface-container-lowest rounded-xl p-5 shadow-soft border border-outline-variant/20">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-100 text-red-600 rounded-lg"><XCircle size={20} /></div>
+            <div>
+              <p className="text-xs text-on-surface-variant">Ditolak</p>
+              <p className="text-xl font-bold text-on-surface font-[family-name:var(--font-heading)]">{rejectedCount}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters & Search */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex flex-wrap gap-2">
+          {([['all', 'Semua'], ['pending', 'Pending'], ['approved', 'Disetujui'], ['rejected', 'Ditolak']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={cn(
+                'px-4 py-2 rounded-full text-xs font-semibold transition-all',
+                filter === key
+                  ? 'gradient-primary text-white shadow-md'
+                  : 'bg-surface-container-high border border-outline-variant text-on-surface hover:border-primary hover:text-primary'
+              )}
+            >
+              {label}
+              {key === 'pending' && pendingCount > 0 && (
+                <span className="ml-1.5 bg-white/20 text-white px-1.5 py-0.5 rounded-full text-[10px]">{pendingCount}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        <div className="relative w-full sm:w-auto">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Cari user..."
+            className="w-full sm:w-64 bg-surface-container-lowest border border-outline-variant rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+          />
+        </div>
+      </div>
+
+      {/* User Table */}
+      <div className="bg-surface-container-lowest rounded-xl shadow-soft overflow-hidden border border-outline-variant/20">
+        {filtered.length === 0 ? (
+          <div className="p-12 text-center">
+            <Users size={48} className="mx-auto text-outline-variant mb-4" />
+            <p className="text-on-surface-variant font-medium">Belum ada user terdaftar</p>
+            <p className="text-xs text-on-surface-variant mt-1">User yang mendaftar akan muncul di sini.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[700px]">
+              <thead>
+                <tr className="bg-surface-container/50 border-b border-outline-variant">
+                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">User</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Email</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Status</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Tanggal Daftar</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/50">
+                {filtered.map(user => {
+                  const sc = statusConfig[user.status];
+                  const StatusIcon = sc.icon;
+                  return (
+                    <tr key={user.id} className="hover:bg-surface-container-low transition-colors">
+                      <td className="py-3 px-5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full gradient-primary text-white flex items-center justify-center text-xs font-bold">
+                            {user.username.slice(0, 2).toUpperCase()}
+                          </div>
+                          <span className="text-sm font-semibold text-on-surface">{user.username}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-5 text-sm text-on-surface-variant">{user.email}</td>
+                      <td className="py-3 px-5">
+                        <span className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border', sc.color)}>
+                          <StatusIcon size={12} />
+                          {sc.label}
+                        </span>
+                      </td>
+                      <td className="py-3 px-5 text-sm text-on-surface-variant">{formatDate(user.createdAt)}</td>
+                      <td className="py-3 px-5 text-right">
+                        {user.status === 'pending' ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => updateUserStatus(user.id, 'approved')}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200 text-xs font-semibold hover:bg-green-100 transition-colors"
+                            >
+                              <UserCheck size={14} /> Setujui
+                            </button>
+                            <button
+                              onClick={() => updateUserStatus(user.id, 'rejected')}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-semibold hover:bg-red-100 transition-colors"
+                            >
+                              <UserX size={14} /> Tolak
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-on-surface-variant">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
