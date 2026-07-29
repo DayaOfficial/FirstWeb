@@ -77,12 +77,12 @@ CREATE TABLE IF NOT EXISTS products (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_products_module ON products(module);
-CREATE INDEX idx_products_category ON products(category);
-CREATE INDEX idx_products_brand ON products(brand);
-CREATE INDEX idx_products_game_name ON products(game_name);
-CREATE INDEX idx_products_is_active ON products(is_active);
-CREATE INDEX idx_products_buyer_sku_code ON products(buyer_sku_code);
+CREATE INDEX IF NOT EXISTS idx_products_module ON products(module);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand);
+CREATE INDEX IF NOT EXISTS idx_products_game_name ON products(game_name);
+CREATE INDEX IF NOT EXISTS idx_products_is_active ON products(is_active);
+CREATE INDEX IF NOT EXISTS idx_products_buyer_sku_code ON products(buyer_sku_code);
 
 -- ============================================================
 -- 3. GAME INPUT TEMPLATES
@@ -132,11 +132,11 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_orders_user_id ON orders(user_id);
-CREATE INDEX idx_orders_order_code ON orders(order_code);
-CREATE INDEX idx_orders_payment_status ON orders(payment_status);
-CREATE INDEX idx_orders_process_status ON orders(process_status);
-CREATE INDEX idx_orders_created_at ON orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code);
+CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
+CREATE INDEX IF NOT EXISTS idx_orders_process_status ON orders(process_status);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at DESC);
 
 -- ============================================================
 -- 5. NOKOS (Nomor Kosong)
@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS nokos_countries (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_nokos_countries_app_id ON nokos_countries(app_id);
+CREATE INDEX IF NOT EXISTS idx_nokos_countries_app_id ON nokos_countries(app_id);
 
 -- ============================================================
 -- 6. BANNERS
@@ -262,8 +262,8 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_notifications_is_read ON notifications(is_read);
-CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
 
 -- ============================================================
 -- ROW LEVEL SECURITY (RLS)
@@ -272,21 +272,25 @@ CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
 -- Profiles
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read own profile" ON profiles;
 CREATE POLICY "Users can read own profile"
   ON profiles FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 CREATE POLICY "Users can update own profile"
   ON profiles FOR UPDATE
   USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Admins can read all profiles" ON profiles;
 CREATE POLICY "Admins can read all profiles"
   ON profiles FOR SELECT
   USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'owner')
   );
 
+DROP POLICY IF EXISTS "Admins can update all profiles" ON profiles;
 CREATE POLICY "Admins can update all profiles"
   ON profiles FOR ALL
   USING (
@@ -296,10 +300,12 @@ CREATE POLICY "Admins can update all profiles"
 -- Products (public read, owner write)
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can read active products" ON products;
 CREATE POLICY "Anyone can read active products"
   ON products FOR SELECT
   USING (is_active = true);
 
+DROP POLICY IF EXISTS "Owner can manage all products" ON products;
 CREATE POLICY "Owner can manage all products"
   ON products FOR ALL
   USING (
@@ -309,20 +315,24 @@ CREATE POLICY "Owner can manage all products"
 -- Orders
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read own orders" ON orders;
 CREATE POLICY "Users can read own orders"
   ON orders FOR SELECT
   USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can create orders" ON orders;
 CREATE POLICY "Users can create orders"
   ON orders FOR INSERT
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Owner can read all orders" ON orders;
 CREATE POLICY "Owner can read all orders"
   ON orders FOR SELECT
   USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'owner')
   );
 
+DROP POLICY IF EXISTS "Owner can update all orders" ON orders;
 CREATE POLICY "Owner can update all orders"
   ON orders FOR ALL
   USING (
@@ -333,16 +343,20 @@ CREATE POLICY "Owner can update all orders"
 ALTER TABLE nokos_apps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE nokos_countries ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can read active nokos_apps" ON nokos_apps;
 CREATE POLICY "Anyone can read active nokos_apps"
   ON nokos_apps FOR SELECT USING (is_active = true);
 
+DROP POLICY IF EXISTS "Owner can manage nokos_apps" ON nokos_apps;
 CREATE POLICY "Owner can manage nokos_apps"
   ON nokos_apps FOR ALL
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'owner'));
 
+DROP POLICY IF EXISTS "Anyone can read active nokos_countries" ON nokos_countries;
 CREATE POLICY "Anyone can read active nokos_countries"
   ON nokos_countries FOR SELECT USING (is_active = true);
 
+DROP POLICY IF EXISTS "Owner can manage nokos_countries" ON nokos_countries;
 CREATE POLICY "Owner can manage nokos_countries"
   ON nokos_countries FOR ALL
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'owner'));
@@ -352,32 +366,42 @@ ALTER TABLE banners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE faqs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE social_links ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can read active banners" ON banners;
 CREATE POLICY "Anyone can read active banners" ON banners FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Owner can manage banners" ON banners;
 CREATE POLICY "Owner can manage banners" ON banners FOR ALL
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'owner'));
 
+DROP POLICY IF EXISTS "Anyone can read active faqs" ON faqs;
 CREATE POLICY "Anyone can read active faqs" ON faqs FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Owner can manage faqs" ON faqs;
 CREATE POLICY "Owner can manage faqs" ON faqs FOR ALL
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'owner'));
 
+DROP POLICY IF EXISTS "Anyone can read active social_links" ON social_links;
 CREATE POLICY "Anyone can read active social_links" ON social_links FOR SELECT USING (is_active = true);
+DROP POLICY IF EXISTS "Owner can manage social_links" ON social_links;
 CREATE POLICY "Owner can manage social_links" ON social_links FOR ALL
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'owner'));
 
 -- Settings (owner only)
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Owner can manage settings" ON settings;
 CREATE POLICY "Owner can manage settings" ON settings FOR ALL
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'owner'));
 
 -- Notifications (owner read, system write via service role)
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Owner can read notifications" ON notifications;
 CREATE POLICY "Owner can read notifications" ON notifications FOR SELECT
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'owner'));
+DROP POLICY IF EXISTS "Owner can update notifications" ON notifications;
 CREATE POLICY "Owner can update notifications" ON notifications FOR UPDATE
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'owner'));
 
 -- Sync logs (owner read only)
 ALTER TABLE sync_logs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Owner can read sync_logs" ON sync_logs;
 CREATE POLICY "Owner can read sync_logs" ON sync_logs FOR SELECT
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'owner'));
 
