@@ -506,7 +506,7 @@ ON CONFLICT (game_key) DO NOTHING;
 INSERT INTO profiles (id, username, email, role, status, approved_at, created_at)
 VALUES (
   '6b46d2d3-491c-43f5-84e8-78195a26b005',
-  'dayamart_owner',
+  'dayamart',
   'dayamartweb@gmail.com',
   'owner',
   'approved',
