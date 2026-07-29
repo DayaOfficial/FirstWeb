@@ -28,33 +28,7 @@ type Slide = BannerSlide | TextSlide;
 /* ─── Hero Carousel ─── */
 function HeroCarousel() {
   const [current, setCurrent] = useState(0);
-
-  // Default text slides
-  const defaultTextSlides: TextSlide[] = [
-    {
-      type: 'text',
-      tag: 'NEW & TRENDING',
-      title: <>DAYA MART:<br />ONE STOP DIGITAL STORE</>,
-      desc: 'Top up game, pulsa, dan app premium jadi lebih mudah, cepat, dan terpercaya.',
-      cta: 'Belanja Sekarang',
-    },
-    {
-      type: 'text',
-      tag: 'PROMO SPESIAL',
-      title: <>DISKON TOPUP<br />MOBILE LEGENDS</>,
-      desc: 'Nikmati diskon hingga 15% untuk semua topup Mobile Legends hari ini!',
-      cta: 'Lihat Promo',
-    },
-    {
-      type: 'text',
-      tag: 'APP PREMIUM',
-      title: <>NETFLIX, SPOTIFY<br />HARGA TERJANGKAU</>,
-      desc: 'Akses aplikasi premium favoritmu mulai dari Rp 15.000/bulan.',
-      cta: 'Jelajahi',
-    },
-  ];
-
-  const [slides, setSlides] = useState<Slide[]>(defaultTextSlides);
+  const [slides, setSlides] = useState<Slide[]>([]);
 
   useEffect(() => {
     // Load banners from localStorage (added by owner)
@@ -70,13 +44,12 @@ function HeroCarousel() {
           imageData: b.imageData,
           title: b.title,
         }));
-        setSlides([...bannerSlides, ...defaultTextSlides]);
+        setSlides(bannerSlides);
         setCurrent(0);
       }
     } catch {
-      // Keep default slides
+      // No banners
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-play
@@ -86,90 +59,73 @@ function HeroCarousel() {
     return () => clearInterval(timer);
   }, [slides.length]);
 
+  // If no banners, don't render the carousel
+  if (slides.length === 0) {
+    return (
+      <section className="relative rounded-2xl overflow-hidden shadow-soft h-[280px] sm:h-[340px] lg:h-[400px]">
+        <div className="w-full h-full flex items-center justify-center gradient-primary text-white relative">
+          <div className="absolute inset-0 pattern-circuit" />
+          <div className="absolute -right-20 -top-20 w-80 h-80 bg-pink-500/20 rounded-full blur-3xl" />
+          <div className="absolute -left-10 -bottom-10 w-60 h-60 bg-secondary/10 rounded-full blur-3xl" />
+          <div className="relative z-10 text-center space-y-4">
+            <h2 className="text-2xl sm:text-3xl lg:text-5xl font-extrabold leading-tight font-[family-name:var(--font-heading)] tracking-tight">
+              DAYA MART
+            </h2>
+            <p className="text-sm sm:text-base text-white/80">One Stop Digital Store</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   const currentSlide = slides[current];
 
   return (
     <section className="relative rounded-2xl overflow-hidden shadow-soft h-[280px] sm:h-[340px] lg:h-[400px]">
-      {currentSlide.type === 'image' ? (
-        /* ── Image Banner Slide ── */
+      {currentSlide.type === 'image' && (
         <div className="relative w-full h-full">
           <img
             src={currentSlide.imageData}
             alt={currentSlide.title}
             className="w-full h-full object-cover transition-opacity duration-500"
           />
-          {/* Subtle gradient overlay at bottom for dots visibility */}
           <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/30 to-transparent" />
-        </div>
-      ) : (
-        /* ── Text Gradient Slide ── */
-        <div className="w-full h-full flex items-center gradient-primary text-white relative">
-          {/* Pattern */}
-          <div className="absolute inset-0 pattern-circuit" />
-          {/* Glow */}
-          <div className="absolute -right-20 -top-20 w-80 h-80 bg-pink-500/20 rounded-full blur-3xl" />
-          <div className="absolute -left-10 -bottom-10 w-60 h-60 bg-secondary/10 rounded-full blur-3xl" />
-
-          <div className="relative z-10 w-full px-6 sm:px-10 lg:px-16 flex items-center justify-between">
-            <div className="max-w-xl space-y-4 lg:space-y-6">
-              <span className="inline-block px-3 py-1 bg-white/10 rounded-full font-semibold text-xs tracking-wide border border-white/20 backdrop-blur-sm">
-                {currentSlide.tag}
-              </span>
-              <h2 className="text-2xl sm:text-3xl lg:text-5xl font-extrabold leading-tight font-[family-name:var(--font-heading)] tracking-tight">
-                {currentSlide.title}
-              </h2>
-              <p className="text-sm sm:text-base text-white/80 max-w-md">
-                {currentSlide.desc}
-              </p>
-              <Link
-                href="/topup-game"
-                className="inline-flex items-center gap-2 bg-white text-primary px-6 py-3 rounded-full font-semibold text-sm hover:bg-surface-container transition-colors shadow-soft shadow-hover-effect"
-              >
-                {currentSlide.cta}
-                <ArrowRight size={18} />
-              </Link>
-            </div>
-
-            {/* Character placeholder */}
-            <div className="hidden lg:block relative w-72 h-72">
-              <div className="absolute inset-0 bg-secondary/20 rounded-full blur-3xl" />
-              <div className="relative z-10 w-full h-full flex items-center justify-center">
-                <div className="w-48 h-48 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center animate-float">
-                  <Gamepad2 size={80} className="text-white/60" />
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
       {/* Nav Arrows */}
-      <button
-        onClick={() => setCurrent((p) => (p - 1 + slides.length) % slides.length)}
-        className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors hidden sm:flex z-20"
-        aria-label="Slide sebelumnya"
-      >
-        <ChevronLeft size={20} />
-      </button>
-      <button
-        onClick={() => setCurrent((p) => (p + 1) % slides.length)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors hidden sm:flex z-20"
-        aria-label="Slide berikutnya"
-      >
-        <ChevronRight size={20} />
-      </button>
+      {slides.length > 1 && (
+        <>
+          <button
+            onClick={() => setCurrent((p) => (p - 1 + slides.length) % slides.length)}
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors hidden sm:flex z-20"
+            aria-label="Slide sebelumnya"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <button
+            onClick={() => setCurrent((p) => (p + 1) % slides.length)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center text-white hover:bg-white/20 transition-colors hidden sm:flex z-20"
+            aria-label="Slide berikutnya"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </>
+      )}
 
       {/* Dots */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
-        {slides.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => setCurrent(i)}
-            className={`w-2 h-2 rounded-full transition-all duration-300 ${i === current ? 'bg-pink-500 w-6' : 'bg-white/40'}`}
-            aria-label={`Slide ${i + 1}`}
-          />
-        ))}
-      </div>
+      {slides.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrent(i)}
+              className={`w-2 h-2 rounded-full transition-all duration-300 ${i === current ? 'bg-pink-500 w-6' : 'bg-white/40'}`}
+              aria-label={`Slide ${i + 1}`}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -210,7 +166,7 @@ function CategoryGrid() {
     { icon: ShieldCheck, label: 'Nokos', href: '/nokos', bg: 'bg-green-50', color: 'text-accent-green', accent: 'bg-accent-green' },
     { icon: Share2, label: 'Sosial Media', href: '/smm-panel', bg: 'bg-pink-50', color: 'text-magenta-600', accent: 'bg-magenta-600' },
     { icon: Wallet, label: 'E-Wallet', href: '/ewallet', bg: 'bg-purple-50', color: 'text-accent-purple', accent: 'bg-accent-purple' },
-    { icon: Satellite, label: 'Jasa Digital', href: '/jasa-digital', bg: 'bg-blue-50', color: 'text-accent-blue', accent: 'bg-accent-blue' },
+
   ];
 
   return (

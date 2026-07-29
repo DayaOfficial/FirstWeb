@@ -22,9 +22,10 @@ export default function TopBar() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const supabase = createClient();
+
     const loadUser = async () => {
       try {
-        const supabase = createClient();
         const { data: { user: authUser } } = await supabase.auth.getUser();
 
         if (authUser) {
@@ -34,13 +35,22 @@ export default function TopBar() {
             .eq('id', authUser.id)
             .single();
 
-          if (profile && profile.status === 'approved') {
+          if (profile) {
             setUser({
               id: authUser.id,
-              username: profile.username,
-              email: profile.email,
+              username: profile.username || authUser.email?.split('@')[0] || 'User',
+              email: profile.email || authUser.email || '',
               avatar_url: profile.avatar_url,
               role: profile.role,
+            });
+          } else {
+            // Profile not yet created by trigger — use auth data
+            setUser({
+              id: authUser.id,
+              username: authUser.email?.split('@')[0] || 'User',
+              email: authUser.email || '',
+              avatar_url: null,
+              role: 'user',
             });
           }
         }
@@ -52,6 +62,18 @@ export default function TopBar() {
     };
 
     loadUser();
+
+    // Listen for auth state changes (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        loadUser();
+      } else {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Close dropdown on outside click

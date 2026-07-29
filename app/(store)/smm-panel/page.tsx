@@ -197,11 +197,13 @@ export default function SmmPanelPage() {
                 </label>
                 <input
                   id="quantity"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={quantity}
-                  onChange={e => setQuantity(Number(e.target.value))}
-                  min={selectedService?.min || 100}
-                  max={selectedService?.max || 50000}
+                  onChange={e => {
+                    const val = e.target.value.replace(/[^0-9]/g, '');
+                    setQuantity(val === '' ? 0 : Number(val));
+                  }}
                   placeholder={`Minimal: ${selectedService?.min || 100}`}
                   className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                 />

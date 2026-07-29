@@ -7,7 +7,8 @@ export function Logo({ size = 40 }: { size?: number }) {
       alt="Logo DAYA MART"
       width={size}
       height={size}
-      className="object-contain"
+      className="object-contain rounded-full"
+      style={{ background: 'transparent' }}
       priority
     />
   );
