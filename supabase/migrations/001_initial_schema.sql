@@ -473,3 +473,23 @@ INSERT INTO game_input_templates (game_key, game_name, currency_label, input_sch
 }')
 
 ON CONFLICT (game_key) DO NOTHING;
+
+-- ============================================================
+-- SEED: Owner Account Setup
+-- ============================================================
+-- Buat profil owner langsung (jika belum dibuat oleh trigger).
+-- ID ini harus cocok dengan user yang sudah dibuat di Supabase Auth → Authentication → Users.
+INSERT INTO profiles (id, username, email, role, status, approved_at, created_at)
+VALUES (
+  '6b46d2d3-491c-43f5-84e8-78195a26b005',
+  'dayamart_owner',
+  'dayamartweb@gmail.com',
+  'owner',
+  'approved',
+  NOW(),
+  NOW()
+)
+ON CONFLICT (id) DO UPDATE SET
+  role = 'owner',
+  status = 'approved',
+  approved_at = NOW();
