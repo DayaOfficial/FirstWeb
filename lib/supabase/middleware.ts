@@ -3,22 +3,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 /**
  * Route publik — tidak perlu login untuk mengakses.
- * Semua route lain dianggap proteksi (harus login).
+ * '/' BUKAN publik — harus login dulu. Awal masuk web = /login.
  */
 const PUBLIC_ROUTES = [
-  '/',
   '/login',
   '/register',
   '/bantuan',
-  '/topup-game',
-  '/pulsa-data',
-  '/token-tagihan',
-  '/ewallet',
-  '/app-premium',
-  '/smm-panel',
-  '/nokos',
-  '/robux-vilog',
-  '/jasa-digital',
 ];
 
 function isPublicRoute(pathname: string) {
@@ -28,11 +18,10 @@ function isPublicRoute(pathname: string) {
   // API routes & webhooks
   if (pathname.startsWith('/api/')) return true;
 
-  // Exact public match or sub-path
-  return PUBLIC_ROUTES.some(route => {
-    if (route === '/') return pathname === '/';
-    return pathname === route || pathname.startsWith(route + '/');
-  });
+  // Bantuan bisa diakses tanpa login
+  if (pathname.startsWith('/bantuan')) return true;
+
+  return false;
 }
 
 export async function updateSession(request: NextRequest) {
