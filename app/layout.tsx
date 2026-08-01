@@ -17,7 +17,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "DAYA MART - One Stop Digital Store",
+  metadataBase: new URL('https://dayamartofficial.my.id'),
+  title: { default: 'DAYA MART — One Stop Digital Store', template: '%s | DAYA MART' },
   description: "Top up game, pulsa, paket data, token listrik, aplikasi premium, dan produk digital lainnya. Proses cepat, harga terbaik, aman & terpercaya.",
   keywords: "top up game, pulsa, paket data, token listrik, QRIS, aplikasi premium, daya mart",
   openGraph: {
