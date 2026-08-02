@@ -61,54 +61,23 @@ export default function RegisterPage() {
     setStatus('loading');
 
     try {
-      const supabase = createClient();
-
-      // Check if username already exists
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('username', username.trim())
-        .single();
-
-      if (existingProfile) {
-        setStatus('error');
-        setErrorMsg('Username sudah digunakan.');
-        return;
-      }
-
-      // Register via Supabase Auth
-      const { error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-        options: {
-          data: {
-            username: username.trim(),
-          },
-        },
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: username.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+        }),
       });
 
-      if (error) {
-        if (error.message.includes('already registered')) {
-          setStatus('error');
-          setErrorMsg('Email sudah terdaftar. Silakan login.');
-        } else if (error.message.includes('rate limit')) {
-          setStatus('error');
-          setErrorMsg('Terlalu banyak percobaan. Silakan tunggu beberapa menit lalu coba lagi.');
-        } else if (error.message.includes('valid email')) {
-          setStatus('error');
-          setErrorMsg('Format email tidak valid.');
-        } else if (error.message.includes('password')) {
-          setStatus('error');
-          setErrorMsg('Password minimal 6 karakter.');
-        } else {
-          setStatus('error');
-          setErrorMsg('Gagal mendaftar: ' + error.message);
-        }
+      const data = await res.json();
+
+      if (!res.ok) {
+        setStatus('error');
+        setErrorMsg(data.error || 'Gagal mendaftar. Coba lagi nanti.');
         return;
       }
-
-      // Sign out immediately (user needs owner approval first)
-      await supabase.auth.signOut();
 
       setStatus('success');
       setUsername('');
@@ -117,7 +86,7 @@ export default function RegisterPage() {
       setConfirmPassword('');
     } catch {
       setStatus('error');
-      setErrorMsg('Terjadi kesalahan. Pastikan koneksi internet dan Supabase sudah dikonfigurasi.');
+      setErrorMsg('Terjadi kesalahan jaringan. Pastikan koneksi internet stabil.');
     }
   };
 
