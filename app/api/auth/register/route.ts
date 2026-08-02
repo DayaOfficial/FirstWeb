@@ -51,6 +51,17 @@ export async function POST(req: Request) {
         role: 'user',
         status: 'pending',
       }, { onConflict: 'id' });
+
+      // Kirim notifikasi ke owner
+      await supabase.from('notifications').insert({
+        type: 'registration',
+        title: `Registrasi Baru: ${username.trim()}`,
+        message: `User ${username.trim()} (${email.trim().toLowerCase()}) mendaftar dan menunggu persetujuan.`,
+        user_id: newUser.user.id,
+        username: username.trim(),
+        email: email.trim().toLowerCase(),
+        is_read: false,
+      });
     }
 
     return NextResponse.json({ success: true, message: 'Registrasi berhasil!' });
