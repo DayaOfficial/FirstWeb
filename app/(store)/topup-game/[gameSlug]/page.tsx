@@ -82,6 +82,65 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
     .eq('game_key', gameKey)
     .single();
 
+  // Fallback input schema per game jika belum ada di DB
+  const FALLBACK_INPUT_SCHEMAS: Record<string, any> = {
+    'ml': {
+      fields: [
+        { key: 'user_id', label: 'User ID', type: 'number', required: true, placeholder: 'Contoh: 123456789', helper: 'Ketuk profil, salin ID' },
+        { key: 'zone_id', label: 'Zone ID', type: 'number', required: true, placeholder: 'Contoh: 1234', helper: 'Angka dalam kurung setelah ID' },
+      ],
+      format_customer_no: '{user_id}.{zone_id}',
+    },
+    'ff': {
+      fields: [{ key: 'player_id', label: 'Player ID', type: 'number', required: true, placeholder: 'Contoh: 123456789', helper: 'Lihat di profil, di bawah nickname' }],
+      format_customer_no: '{player_id}',
+    },
+    'gi': {
+      fields: [{ key: 'uid', label: 'UID', type: 'number', required: true, placeholder: 'Contoh: 812345678', helper: 'Server Asia diawali angka 8 (9 digit)' }],
+      format_customer_no: '{uid}',
+    },
+    'pb': {
+      fields: [{ key: 'player_id', label: 'Character ID', type: 'number', required: true, placeholder: 'Contoh: 5123456789', helper: 'Profil → Character ID (9-10 digit)' }],
+      format_customer_no: '{player_id}',
+    },
+    'vl': {
+      fields: [
+        { key: 'riot_id', label: 'Riot ID', type: 'text', required: true, placeholder: 'Contoh: BUDIGAMING' },
+        { key: 'riot_tag', label: 'Tagline', type: 'text', required: true, placeholder: 'Contoh: 1234', helper: 'Kode setelah tanda #' },
+      ],
+      format_customer_no: '{riot_id}#{riot_tag}',
+    },
+    'rb': {
+      fields: [{ key: 'username', label: 'Username Roblox', type: 'text', required: true, placeholder: 'Contoh: budi_gaming123', helper: 'Username login, bukan display name' }],
+      format_customer_no: '{username}',
+    },
+    'hsr': {
+      fields: [{ key: 'uid', label: 'UID', type: 'number', required: true, placeholder: 'Contoh: 812345678', helper: '9 digit, diawali angka 8' }],
+      format_customer_no: '{uid}',
+    },
+    'hd': {
+      fields: [{ key: 'player_id', label: 'Player ID', type: 'number', required: true, placeholder: 'Contoh: 123456789' }],
+      format_customer_no: '{player_id}',
+    },
+    'cod': {
+      fields: [{ key: 'player_id', label: 'Player ID / UID', type: 'number', required: true, placeholder: 'Contoh: 6812345678' }],
+      format_customer_no: '{player_id}',
+    },
+    'coc': {
+      fields: [{ key: 'player_tag', label: 'Player Tag', type: 'text', required: true, placeholder: 'Contoh: #P0JCQL9', helper: 'Tag diawali # (dari profil)' }],
+      format_customer_no: '{player_tag}',
+    },
+    'stm': {
+      fields: [{ key: 'email', label: 'Email Steam', type: 'email', required: true, placeholder: 'email@contoh.com', helper: 'Email yang terdaftar di akun Steam' }],
+      format_customer_no: '{email}',
+    },
+  };
+
+  const inputSchema = (template?.input_schema as any) || FALLBACK_INPUT_SCHEMAS[gameSlug] || {
+    fields: [{ key: 'player_id', label: 'ID Pemain', type: 'text', required: true, placeholder: 'Masukkan ID' }],
+    format_customer_no: '{player_id}',
+  };
+
   const gameInfo = GAME_INFO[gameSlug];
   if (!gameInfo) notFound();
 
@@ -94,8 +153,6 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
         buyer_sku_code: n.buyer_sku_code || '',
       }))
     : getFallbackNominals(gameSlug);
-
-  const inputSchema = template?.input_schema as any || null;
 
   return (
     <div className="space-y-6">

@@ -9,24 +9,30 @@ export const metadata = {
 export default async function ProfilPage() {
   const supabase = await createClient();
 
-  // Baca session di SERVER — bukan di client useEffect
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Safety net (seharusnya middleware sudah handle, ini lapis kedua)
   if (!user) {
     redirect('/login?redirect=/profil');
   }
 
-  // Load profile
+  // Load profile — coba dari profiles, fallback ke auth metadata
   const { data: profile } = await supabase
     .from('profiles')
     .select('id, username, email, avatar_url, role, status, created_at')
     .eq('id', user.id)
     .single();
 
-  if (!profile) {
-    redirect('/login?redirect=/profil');
-  }
+  // Jika profile tidak ada di DB (belum dibuat trigger / RLS block),
+  // JANGAN redirect ke login — tampilkan dari data auth
+  const resolvedProfile = profile ?? {
+    id: user.id,
+    username: user.user_metadata?.username || user.email?.split('@')[0] || 'User',
+    email: user.email || '',
+    avatar_url: user.user_metadata?.avatar_url || null,
+    role: user.user_metadata?.role || 'user',
+    status: 'active',
+    created_at: user.created_at || new Date().toISOString(),
+  };
 
   // Load orders
   const { data: orders } = await supabase
@@ -36,12 +42,11 @@ export default async function ProfilPage() {
     .order('created_at', { ascending: false })
     .limit(100);
 
-  // TIDAK ADA lagi teks "belum login" — kalau sampai sini, user PASTI login
   return (
     <ProfilView
-      profile={profile}
+      profile={resolvedProfile}
       orders={(orders ?? []) as any}
-      isOwner={profile.role === 'owner'}
+      isOwner={resolvedProfile.role === 'owner'}
     />
   );
 }

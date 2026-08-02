@@ -1,15 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home, Gamepad2, Crown, Smartphone, Zap, ShieldCheck,
-  Share2, Wallet, HelpCircle, MessageCircle,
+  Share2, Wallet, HelpCircle, MessageCircle, LayoutDashboard,
   Menu, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
+import { createClient } from '@/lib/supabase/client';
 
 const navItems = [
   { icon: Home, label: 'Beranda', href: '/' },
@@ -26,6 +27,24 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      if (profile?.role === 'owner') {
+        setIsOwner(true);
+      } else if (user.user_metadata?.role === 'owner') {
+        setIsOwner(true);
+      }
+    });
+  }, []);
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
@@ -67,6 +86,26 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Owner Panel Link — hanya tampil untuk owner */}
+        {isOwner && (
+          <>
+            <div className="my-2 border-t border-outline-variant" />
+            <Link
+              href="/panel/x7k9m2-daya-owner"
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                'flex items-center gap-3 px-4 py-2.5 rounded-lg border-l-4 transition-all duration-200 group',
+                pathname.startsWith('/panel')
+                  ? 'border-primary bg-primary/5 text-primary font-bold'
+                  : 'border-transparent text-primary font-semibold hover:bg-primary/5'
+              )}
+            >
+              <LayoutDashboard size={20} />
+              <span className="text-sm font-semibold">Owner Panel</span>
+            </Link>
+          </>
+        )}
       </nav>
 
       {/* CTA */}
@@ -91,7 +130,7 @@ export default function Sidebar() {
         {sidebarContent}
       </aside>
 
-      {/* Mobile Hamburger Button */}
+      {/* Mobile Hamburger */}
       <button
         onClick={() => setMobileOpen(true)}
         className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-full bg-surface shadow-soft border border-outline-variant text-primary"
@@ -103,12 +142,10 @@ export default function Sidebar() {
       {/* Mobile Drawer */}
       {mobileOpen && (
         <>
-          {/* Overlay */}
           <div
             className="fixed inset-0 bg-black/50 z-[60] lg:hidden backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          {/* Drawer */}
           <aside className="fixed left-0 top-0 h-full w-[280px] z-[70] bg-surface shadow-xl flex flex-col p-6 animate-slide-in-left lg:hidden">
             <button
               onClick={() => setMobileOpen(false)}

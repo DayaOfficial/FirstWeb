@@ -29,6 +29,7 @@ export default function TopBar() {
         const { data: { user: authUser } } = await supabase.auth.getUser();
 
         if (authUser) {
+          // Coba ambil dari profiles
           const { data: profile } = await supabase
             .from('profiles')
             .select('username, email, avatar_url, role, status')
@@ -44,13 +45,14 @@ export default function TopBar() {
               role: profile.role,
             });
           } else {
-            // Profile not yet created by trigger — use auth data
+            // Profile belum ada di DB — fallback ke auth user_metadata
+            const meta = authUser.user_metadata || {};
             setUser({
               id: authUser.id,
-              username: authUser.email?.split('@')[0] || 'User',
+              username: meta.username || authUser.email?.split('@')[0] || 'User',
               email: authUser.email || '',
-              avatar_url: null,
-              role: 'user',
+              avatar_url: meta.avatar_url || null,
+              role: meta.role || 'user',
             });
           }
         }
@@ -96,7 +98,7 @@ export default function TopBar() {
     }
     setUser(null);
     setDropdownOpen(false);
-    router.push('/');
+    router.push('/login');
     router.refresh();
   };
 
@@ -164,6 +166,16 @@ export default function TopBar() {
                   </div>
                 </div>
 
+                {/* Owner Panel — PALING ATAS agar terlihat jelas */}
+                {user.role === 'owner' && (
+                  <div className="border-b border-outline-variant/30 py-1">
+                    <Link href="/panel/x7k9m2-daya-owner" onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary font-semibold hover:bg-primary/5 transition-colors">
+                      <LayoutDashboard size={16} /> Owner Control Panel
+                    </Link>
+                  </div>
+                )}
+
                 {/* Links */}
                 <div className="py-1">
                   <Link href="/profil" onClick={() => setDropdownOpen(false)}
@@ -179,16 +191,6 @@ export default function TopBar() {
                     <Settings size={16} className="text-on-surface-variant" /> Pengaturan
                   </Link>
                 </div>
-
-                {/* Owner Panel */}
-                {user.role === 'owner' && (
-                  <div className="border-t border-outline-variant/30 py-1">
-                    <Link href="/panel/x7k9m2-daya-owner" onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary font-semibold hover:bg-primary/5 transition-colors">
-                      <LayoutDashboard size={16} /> Owner Panel
-                    </Link>
-                  </div>
-                )}
 
                 {/* Logout */}
                 <div className="border-t border-outline-variant/30 py-1">
