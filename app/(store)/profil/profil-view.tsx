@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -83,6 +83,17 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
   const [showCount, setShowCount] = useState(10);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-scroll ke section berdasarkan hash (#riwayat, #pengaturan)
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '');
+    if (hash) {
+      setTimeout(() => {
+        const el = document.getElementById(hash);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+    }
+  }, []);
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -219,8 +230,8 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
             </div>
             <div>
               <p className="text-xs text-on-surface-variant">Status</p>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${profile.status === 'approved' ? 'bg-accent-green/10 text-accent-green border border-accent-green/30' : 'bg-amber-100 text-amber-700 border border-amber-300'}`}>
-                {profile.status === 'approved' ? 'Aktif' : profile.status === 'pending' ? 'Menunggu' : profile.status}
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${(profile.status === 'approved' || profile.status === 'active') ? 'bg-accent-green/10 text-accent-green border border-accent-green/30' : 'bg-amber-100 text-amber-700 border border-amber-300'}`}>
+                {(profile.status === 'approved' || profile.status === 'active') ? 'Aktif' : profile.status === 'pending' ? 'Menunggu' : (profile.status || 'Aktif')}
               </span>
             </div>
           </div>
@@ -245,7 +256,7 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
       )}
 
       {/* Riwayat Transaksi */}
-      <section className="space-y-4">
+      <section id="riwayat" className="space-y-4 scroll-mt-20">
         <h2 className="text-lg font-bold text-on-surface font-[family-name:var(--font-heading)]">Riwayat Transaksi</h2>
 
         {/* Filter & Search */}
@@ -303,7 +314,7 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
       </section>
 
       {/* Pengaturan Akun */}
-      <section className="space-y-3">
+      <section id="pengaturan" className="space-y-3 scroll-mt-20">
         <h2 className="text-lg font-bold text-on-surface font-[family-name:var(--font-heading)]">Pengaturan Akun</h2>
         <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-soft overflow-hidden divide-y divide-outline-variant/30">
           <button className="w-full px-5 py-4 flex items-center gap-3 hover:bg-surface-container-low transition-colors group">
