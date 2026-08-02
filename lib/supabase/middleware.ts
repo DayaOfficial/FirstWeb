@@ -82,32 +82,12 @@ export async function updateSession(request: NextRequest) {
   }
 
   // 3. Proteksi panel owner — hanya owner aktif yang boleh akses
-  if (pathname.startsWith('/panel')) {
-    if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/login';
-      url.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(url);
-    }
-
-    // Cek dari profiles table
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, status')
-      .eq('id', user.id)
-      .single();
-
-    // Cek role: profiles table ATAU auth metadata (fallback)
-    const role = profile?.role || user.user_metadata?.role;
-    const status = profile?.status || 'active';
-    const isOwner = role === 'owner';
-    const isActive = status === 'approved' || status === 'active';
-
-    if (!isOwner || !isActive) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/';
-      return NextResponse.redirect(url);
-    }
+  // 3. Proteksi panel owner — harus login (role check dipindah ke panel layout)
+  if (pathname.startsWith('/panel') && !user) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    url.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(url);
   }
 
   return supabaseResponse;
