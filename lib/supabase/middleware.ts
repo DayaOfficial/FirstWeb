@@ -90,13 +90,20 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
+    // Cek dari profiles table
     const { data: profile } = await supabase
       .from('profiles')
       .select('role, status')
       .eq('id', user.id)
       .single();
 
-    if (profile?.role !== 'owner' || profile?.status !== 'approved') {
+    // Cek role: profiles table ATAU auth metadata (fallback)
+    const role = profile?.role || user.user_metadata?.role;
+    const status = profile?.status || 'active';
+    const isOwner = role === 'owner';
+    const isActive = status === 'approved' || status === 'active';
+
+    if (!isOwner || !isActive) {
       const url = request.nextUrl.clone();
       url.pathname = '/';
       return NextResponse.redirect(url);
