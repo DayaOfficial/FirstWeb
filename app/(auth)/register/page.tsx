@@ -90,10 +90,19 @@ export default function RegisterPage() {
       if (error) {
         if (error.message.includes('already registered')) {
           setStatus('error');
-          setErrorMsg('Email sudah terdaftar.');
+          setErrorMsg('Email sudah terdaftar. Silakan login.');
+        } else if (error.message.includes('rate limit')) {
+          setStatus('error');
+          setErrorMsg('Terlalu banyak percobaan. Silakan tunggu beberapa menit lalu coba lagi.');
+        } else if (error.message.includes('valid email')) {
+          setStatus('error');
+          setErrorMsg('Format email tidak valid.');
+        } else if (error.message.includes('password')) {
+          setStatus('error');
+          setErrorMsg('Password minimal 6 karakter.');
         } else {
           setStatus('error');
-          setErrorMsg(error.message);
+          setErrorMsg('Gagal mendaftar: ' + error.message);
         }
         return;
       }

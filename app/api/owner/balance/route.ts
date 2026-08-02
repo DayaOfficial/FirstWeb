@@ -17,7 +17,8 @@ export async function GET(req: Request) {
     .eq('id', user.id)
     .single();
 
-  if (profile?.role !== 'owner') {
+  const role = profile?.role || user.user_metadata?.role;
+  if (role !== 'owner') {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
