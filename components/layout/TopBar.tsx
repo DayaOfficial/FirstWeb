@@ -137,7 +137,7 @@ export default function TopBar() {
       {/* Actions */}
       <div className="flex items-center gap-2 ml-4">
         {/* Bell — hanya untuk owner */}
-        {!loading && user?.role === 'owner' && (
+        {!loading && user && user.role === 'owner' && (
           <Link
             href="/panel/x7k9m2-daya-owner/notifikasi"
             className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/5 rounded-full transition-colors duration-200 relative"
