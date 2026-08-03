@@ -112,10 +112,10 @@ export default function OwnerPanelShell({ ownerName, children }: { ownerName: st
               className="block w-full pl-4 pr-4 py-2 border border-outline-variant rounded-full bg-surface-container-lowest text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder-on-surface-variant/70" />
           </div>
           <div className="flex items-center gap-3 ml-4">
-            <button className="p-2 rounded-full hover:bg-primary/5 text-on-surface-variant relative">
+            <Link href="/panel/x7k9m2-daya-owner/notifikasi" className="p-2 rounded-full hover:bg-primary/5 text-on-surface-variant relative">
               <Bell size={20} />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full" />
-            </button>
+            </Link>
             <div className="h-8 w-px bg-outline-variant" />
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold">
