@@ -34,19 +34,20 @@ export default function LoginPage() {
       // Determine if input is email or username
       let email = usernameOrEmail.trim();
       if (!email.includes('@')) {
-        // Username login — look up email from profiles
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('username', email)
-          .single();
+        // Username login — look up email via API (bypass RLS)
+        const lookupRes = await fetch('/api/auth/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: email }),
+        });
 
-        if (!profile) {
+        if (!lookupRes.ok) {
           setStatus('error');
           setErrorMsg('Username tidak ditemukan.');
           return;
         }
-        email = profile.email;
+        const lookupData = await lookupRes.json();
+        email = lookupData.email;
       }
 
       // Supabase Auth sign in
@@ -61,24 +62,21 @@ export default function LoginPage() {
         return;
       }
 
-      // Check profile status (pending / rejected / approved)
+      // Check profile status via API (bypass RLS)
       if (data.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('status, role')
-          .eq('id', data.user.id)
-          .single();
-
-        if (profile?.status === 'pending') {
-          await supabase.auth.signOut();
-          setStatus('pending');
-          return;
-        }
-
-        if (profile?.status === 'rejected') {
-          await supabase.auth.signOut();
-          setStatus('rejected');
-          return;
+        const statusRes = await fetch('/api/auth/check-status');
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          
+          if (statusData.status === 'pending') {
+            setStatus('pending');
+            return;
+          }
+          if (statusData.status === 'rejected') {
+            await supabase.auth.signOut();
+            setStatus('rejected');
+            return;
+          }
         }
       }
 
@@ -87,7 +85,7 @@ export default function LoginPage() {
       router.refresh();
     } catch {
       setStatus('error');
-      setErrorMsg('Terjadi kesalahan. Pastikan koneksi internet Anda stabil dan Supabase sudah dikonfigurasi.');
+      setErrorMsg('Terjadi kesalahan. Pastikan koneksi internet Anda stabil.');
     }
   };
 

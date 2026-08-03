@@ -86,20 +86,22 @@ export async function updateSession(request: NextRequest) {
 
   // 3. Cek status user (pending/rejected) — blokir akses kecuali owner
   if (user && !isPublic && !pathname.startsWith('/pending') && !pathname.startsWith('/api/')) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('status, role')
-      .eq('id', user.id)
-      .single();
-
-    const role = profile?.role || user.user_metadata?.role;
-    const status = profile?.status || 'pending';
+    const role = user.user_metadata?.role;
 
     // Owner selalu bisa akses
     if (role !== 'owner') {
-      // Jika pending atau rejected → redirect ke halaman pending
-      if (status === 'pending' || status === 'rejected') {
-        if (!pathname.startsWith('/pending')) {
+      // Coba baca status dari profiles
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('status, role')
+        .eq('id', user.id)
+        .single();
+
+      const profileRole = profile?.role;
+      if (profileRole !== 'owner') {
+        const status = profile?.status || 'pending';
+        // Hanya 'active' dan 'approved' yang boleh masuk
+        if (status !== 'active' && status !== 'approved') {
           const url = request.nextUrl.clone();
           url.pathname = '/pending';
           return NextResponse.redirect(url);
