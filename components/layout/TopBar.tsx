@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, Bell, User, Receipt, Settings, LayoutDashboard, LogOut } from 'lucide-react';
+import { Search, Bell, User, Settings, LayoutDashboard, LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 interface UserSession {
@@ -19,6 +19,7 @@ export default function TopBar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -75,7 +76,23 @@ export default function TopBar() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Load notification count setiap 30 detik
+    const loadNotifCount = async () => {
+      try {
+        const { count } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_read', false);
+        setUnreadCount(count || 0);
+      } catch { /* ignore */ }
+    };
+    loadNotifCount();
+    const interval = setInterval(loadNotifCount, 30000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearInterval(interval);
+    };
   }, []);
 
   // Close dropdown on outside click
@@ -119,10 +136,20 @@ export default function TopBar() {
 
       {/* Actions */}
       <div className="flex items-center gap-2 ml-4">
-        <button className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/5 rounded-full transition-colors duration-200 relative">
-          <Bell size={20} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full" />
-        </button>
+        {/* Bell — hanya untuk owner */}
+        {!loading && user?.role === 'owner' && (
+          <Link
+            href="/panel/x7k9m2-daya-owner/notifikasi"
+            className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/5 rounded-full transition-colors duration-200 relative"
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-pink-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </Link>
+        )}
 
         {/* Not logged in */}
         {!loading && !user && (

@@ -21,6 +21,9 @@ function isPublicRoute(pathname: string) {
   // Bantuan bisa diakses tanpa login
   if (pathname.startsWith('/bantuan')) return true;
 
+  // Pending page
+  if (pathname.startsWith('/pending')) return true;
+
   return false;
 }
 
@@ -81,8 +84,31 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // 3. Proteksi panel owner — hanya owner aktif yang boleh akses
-  // 3. Proteksi panel owner — harus login (role check dipindah ke panel layout)
+  // 3. Cek status user (pending/rejected) — blokir akses kecuali owner
+  if (user && !isPublic && !pathname.startsWith('/pending') && !pathname.startsWith('/api/')) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('status, role')
+      .eq('id', user.id)
+      .single();
+
+    const role = profile?.role || user.user_metadata?.role;
+    const status = profile?.status || 'pending';
+
+    // Owner selalu bisa akses
+    if (role !== 'owner') {
+      // Jika pending atau rejected → redirect ke halaman pending
+      if (status === 'pending' || status === 'rejected') {
+        if (!pathname.startsWith('/pending')) {
+          const url = request.nextUrl.clone();
+          url.pathname = '/pending';
+          return NextResponse.redirect(url);
+        }
+      }
+    }
+  }
+
+  // 4. Proteksi panel owner — harus login
   if (pathname.startsWith('/panel') && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
