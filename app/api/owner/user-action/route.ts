@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     const serviceSupabase = createServiceClient();
 
     // Update status di profiles
-    const newStatus = action === 'approved' ? 'active' : 'rejected';
+    const newStatus = action === 'approved' ? 'approved' : 'rejected';
     const { error: updateError } = await serviceSupabase
       .from('profiles')
       .update({ status: newStatus })
