@@ -23,25 +23,41 @@ export default function PendingPage() {
 
       setUsername(user.user_metadata?.username || user.email?.split('@')[0] || 'User');
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('status')
-        .eq('id', user.id)
-        .single();
+      // Gunakan API check-status yang pakai service client (bypass RLS)
+      try {
+        const res = await fetch('/api/auth/check-status');
+        if (res.ok) {
+          const data = await res.json();
+          const st = data.status || 'pending';
+          setStatus(st);
 
-      const st = profile?.status || 'pending';
-      setStatus(st);
+          // Jika sudah approved/active → redirect ke beranda
+          if (st === 'approved' || st === 'active') {
+            router.push('/');
+            router.refresh();
+          }
+        }
+      } catch {
+        // Fallback: query langsung (mungkin gagal karena RLS)
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('status')
+          .eq('id', user.id)
+          .single();
 
-      // Jika sudah approved/active → redirect ke beranda
-      if (st === 'approved' || st === 'active') {
-        router.push('/');
-        router.refresh();
+        const st = profile?.status || 'pending';
+        setStatus(st);
+
+        if (st === 'approved' || st === 'active') {
+          router.push('/');
+          router.refresh();
+        }
       }
     };
 
     checkStatus();
-    // Auto-check setiap 10 detik
-    const interval = setInterval(checkStatus, 10000);
+    // Auto-check setiap 5 detik (lebih cepat agar user tidak menunggu lama)
+    const interval = setInterval(checkStatus, 5000);
     return () => clearInterval(interval);
   }, [router]);
 

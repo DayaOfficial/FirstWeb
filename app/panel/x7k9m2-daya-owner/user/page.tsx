@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Users, CheckCircle2, XCircle, Clock, Search, UserCheck, UserX } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Users, CheckCircle2, XCircle, Clock, Search, UserCheck, UserX, Loader2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
@@ -9,51 +9,79 @@ interface UserData {
   id: string;
   username: string;
   email: string;
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: string;
+  status: 'pending' | 'active' | 'approved' | 'rejected';
+  role: string;
+  created_at: string;
 }
 
 export default function OwnerUserPage() {
   const [users, setUsers] = useState<UserData[]>([]);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'active' | 'rejected'>('all');
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/owner/users');
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data);
+      } else {
+        console.error('[users] failed to load:', await res.text());
+      }
+    } catch (err) {
+      console.error('[users] load error:', err);
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     loadUsers();
-  }, []);
+  }, [loadUsers]);
 
-  const loadUsers = () => {
-    const stored = JSON.parse(localStorage.getItem('daya_users') || '[]');
-    setUsers(stored);
-  };
+  const updateUserStatus = async (userId: string, newStatus: 'approved' | 'rejected') => {
+    setActionLoading(`${userId}_${newStatus}`);
+    try {
+      const res = await fetch('/api/owner/user-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: newStatus }),
+      });
 
-  const updateUserStatus = (userId: string, newStatus: 'approved' | 'rejected') => {
-    const stored: UserData[] = JSON.parse(localStorage.getItem('daya_users') || '[]');
-    const updated = stored.map(u => u.id === userId ? { ...u, status: newStatus } : u);
-    localStorage.setItem('daya_users', JSON.stringify(updated));
-    setUsers(updated);
-
-    // Update notifications
-    const notifications = JSON.parse(localStorage.getItem('daya_notifications') || '[]');
-    const updatedNotifs = notifications.map((n: { userId?: string; isRead: boolean }) =>
-      n.userId === userId ? { ...n, isRead: true } : n
-    );
-    localStorage.setItem('daya_notifications', JSON.stringify(updatedNotifs));
+      if (res.ok) {
+        // Update local state langsung
+        const resultStatus = newStatus === 'approved' ? 'active' : 'rejected';
+        setUsers(prev =>
+          prev.map(u => u.id === userId ? { ...u, status: resultStatus as UserData['status'] } : u)
+        );
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(`Gagal ${newStatus === 'approved' ? 'menyetujui' : 'menolak'} user. ${errData.error || 'Coba lagi.'}`);
+      }
+    } catch (err) {
+      console.error('[users] action error:', err);
+      alert('Terjadi kesalahan jaringan. Coba lagi.');
+    }
+    setActionLoading(null);
   };
 
   const filtered = users.filter(u => {
-    const matchFilter = filter === 'all' || u.status === filter;
-    const matchSearch = u.username.toLowerCase().includes(search.toLowerCase()) ||
-                        u.email.toLowerCase().includes(search.toLowerCase());
+    const matchFilter = filter === 'all' || u.status === filter ||
+      (filter === 'active' && (u.status === 'active' || u.status === 'approved'));
+    const matchSearch = (u.username || '').toLowerCase().includes(search.toLowerCase()) ||
+                        (u.email || '').toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
 
   const pendingCount = users.filter(u => u.status === 'pending').length;
-  const approvedCount = users.filter(u => u.status === 'approved').length;
+  const approvedCount = users.filter(u => u.status === 'active' || u.status === 'approved').length;
   const rejectedCount = users.filter(u => u.status === 'rejected').length;
 
-  const statusConfig = {
+  const statusConfig: Record<string, { label: string; color: string; icon: typeof Clock }> = {
     pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: Clock },
+    active: { label: 'Aktif', color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 },
     approved: { label: 'Disetujui', color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle2 },
     rejected: { label: 'Ditolak', color: 'bg-red-100 text-red-700 border-red-200', icon: XCircle },
   };
@@ -84,7 +112,7 @@ export default function OwnerUserPage() {
           <div className="flex items-center gap-3">
             <div className="p-2 bg-green-100 text-green-600 rounded-lg"><CheckCircle2 size={20} /></div>
             <div>
-              <p className="text-xs text-on-surface-variant">Disetujui</p>
+              <p className="text-xs text-on-surface-variant">Aktif</p>
               <p className="text-xl font-bold text-on-surface font-[family-name:var(--font-heading)]">{approvedCount}</p>
             </div>
           </div>
@@ -103,7 +131,7 @@ export default function OwnerUserPage() {
       {/* Filters & Search */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex flex-wrap gap-2">
-          {([['all', 'Semua'], ['pending', 'Pending'], ['approved', 'Disetujui'], ['rejected', 'Ditolak']] as const).map(([key, label]) => (
+          {([['all', 'Semua'], ['pending', 'Pending'], ['active', 'Aktif'], ['rejected', 'Ditolak']] as const).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setFilter(key)}
@@ -135,7 +163,11 @@ export default function OwnerUserPage() {
 
       {/* User Table */}
       <div className="bg-surface-container-lowest rounded-xl shadow-soft overflow-hidden border border-outline-variant/20">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 size={32} className="animate-spin text-primary" />
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
             <Users size={48} className="mx-auto text-outline-variant mb-4" />
             <p className="text-on-surface-variant font-medium">Belum ada user terdaftar</p>
@@ -155,40 +187,44 @@ export default function OwnerUserPage() {
               </thead>
               <tbody className="divide-y divide-outline-variant/50">
                 {filtered.map(user => {
-                  const sc = statusConfig[user.status];
+                  const sc = statusConfig[user.status] || statusConfig.pending;
                   const StatusIcon = sc.icon;
                   return (
                     <tr key={user.id} className="hover:bg-surface-container-low transition-colors">
                       <td className="py-3 px-5">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full gradient-primary text-white flex items-center justify-center text-xs font-bold">
-                            {user.username.slice(0, 2).toUpperCase()}
+                            {(user.username || '??').slice(0, 2).toUpperCase()}
                           </div>
-                          <span className="text-sm font-semibold text-on-surface">{user.username}</span>
+                          <span className="text-sm font-semibold text-on-surface">{user.username || '-'}</span>
                         </div>
                       </td>
-                      <td className="py-3 px-5 text-sm text-on-surface-variant">{user.email}</td>
+                      <td className="py-3 px-5 text-sm text-on-surface-variant">{user.email || '-'}</td>
                       <td className="py-3 px-5">
                         <span className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border', sc.color)}>
                           <StatusIcon size={12} />
                           {sc.label}
                         </span>
                       </td>
-                      <td className="py-3 px-5 text-sm text-on-surface-variant">{formatDate(user.createdAt)}</td>
+                      <td className="py-3 px-5 text-sm text-on-surface-variant">{formatDate(user.created_at)}</td>
                       <td className="py-3 px-5 text-right">
                         {user.status === 'pending' ? (
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => updateUserStatus(user.id, 'approved')}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200 text-xs font-semibold hover:bg-green-100 transition-colors"
+                              disabled={!!actionLoading}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200 text-xs font-semibold hover:bg-green-100 transition-colors disabled:opacity-50"
                             >
-                              <UserCheck size={14} /> Setujui
+                              {actionLoading === `${user.id}_approved` ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
+                              Setujui
                             </button>
                             <button
                               onClick={() => updateUserStatus(user.id, 'rejected')}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-semibold hover:bg-red-100 transition-colors"
+                              disabled={!!actionLoading}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-semibold hover:bg-red-100 transition-colors disabled:opacity-50"
                             >
-                              <UserX size={14} /> Tolak
+                              {actionLoading === `${user.id}_rejected` ? <Loader2 size={14} className="animate-spin" /> : <UserX size={14} />}
+                              Tolak
                             </button>
                           </div>
                         ) : (

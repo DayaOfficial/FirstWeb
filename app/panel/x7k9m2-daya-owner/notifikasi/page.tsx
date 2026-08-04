@@ -75,10 +75,17 @@ export default function OwnerNotifikasiPage() {
         body: JSON.stringify({ userId: notif.user_id, action }),
       });
       if (res.ok) {
-        await markAsRead(notif.id);
-        await loadNotifications();
+        // Hapus notifikasi dari state langsung (API sudah menghapus dari DB)
+        setNotifications(prev => prev.filter(n => n.id !== notif.id));
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        console.error('[notifikasi] user action failed:', errData);
+        alert(`Gagal ${action === 'approved' ? 'menyetujui' : 'menolak'} user. ${errData.error || 'Coba lagi.'}`);
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      console.error('[notifikasi] user action error:', err);
+      alert('Terjadi kesalahan jaringan. Coba lagi.');
+    }
     setActionLoading(null);
   };
 

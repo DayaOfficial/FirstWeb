@@ -32,13 +32,31 @@ export async function POST(req: Request) {
 
     // Update status di profiles
     const newStatus = action === 'approved' ? 'active' : 'rejected';
-    await serviceSupabase
+    const { error: updateError } = await serviceSupabase
       .from('profiles')
       .update({ status: newStatus })
       .eq('id', userId);
 
+    if (updateError) {
+      console.error('[user-action] update profile error:', updateError.message);
+      return NextResponse.json({ error: 'Gagal mengupdate status user.' }, { status: 500 });
+    }
+
+    // Hapus notifikasi terkait user ini setelah action berhasil
+    const { error: deleteNotifError } = await serviceSupabase
+      .from('notifications')
+      .delete()
+      .eq('user_id', userId)
+      .eq('type', 'registration');
+
+    if (deleteNotifError) {
+      console.error('[user-action] delete notification error:', deleteNotifError.message);
+      // Tidak fatal — lanjutkan saja
+    }
+
     return NextResponse.json({ success: true, status: newStatus });
-  } catch {
+  } catch (err) {
+    console.error('[user-action] unexpected error:', err);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
