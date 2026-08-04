@@ -46,6 +46,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Gagal mengupdate status user.' }, { status: 500 });
     }
 
+    // Sync status ke user metadata (agar middleware bisa baca dari JWT tanpa query profiles)
+    const { error: metaError } = await serviceSupabase.auth.admin.updateUserById(userId, {
+      user_metadata: { status: newStatus },
+    });
+
+    if (metaError) {
+      console.error('[user-action] update user metadata error:', metaError.message);
+      // Tidak fatal — profile sudah diupdate, metadata hanya pelengkap
+    }
+
     // Hapus notifikasi terkait user ini setelah action berhasil
     const { error: deleteNotifError } = await serviceSupabase
       .from('notifications')

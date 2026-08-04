@@ -90,18 +90,28 @@ export async function updateSession(request: NextRequest) {
 
     // Owner selalu bisa akses
     if (role !== 'owner') {
-      // Coba baca status dari profiles
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('status, role')
-        .eq('id', user.id)
-        .single();
+      // Prioritas 1: Baca status dari user_metadata (JWT — paling reliable di Edge)
+      let status = user.user_metadata?.status;
+      let profileRole: string | undefined;
 
-      const profileRole = profile?.role;
-      if (profileRole !== 'owner') {
-        const status = profile?.status || 'pending';
-        // Hanya 'active' dan 'approved' yang boleh masuk
-        if (status !== 'active' && status !== 'approved') {
+      // Prioritas 2: Fallback ke query profiles jika metadata belum ada
+      if (!status) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('status, role')
+          .eq('id', user.id)
+          .single();
+
+        status = profile?.status;
+        profileRole = profile?.role;
+      }
+
+      // Owner di profiles juga bisa akses
+      if (profileRole === 'owner') {
+        // skip — owner boleh masuk
+      } else {
+        const finalStatus = status || 'pending';
+        if (finalStatus !== 'active' && finalStatus !== 'approved') {
           const url = request.nextUrl.clone();
           url.pathname = '/pending';
           return NextResponse.redirect(url);
