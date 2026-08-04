@@ -52,7 +52,7 @@ export default function OwnerUserPage() {
 
       if (res.ok) {
         // Update local state langsung
-        const resultStatus = newStatus === 'approved' ? 'active' : 'rejected';
+        const resultStatus = newStatus === 'approved' ? 'approved' : 'rejected';
         setUsers(prev =>
           prev.map(u => u.id === userId ? { ...u, status: resultStatus as UserData['status'] } : u)
         );

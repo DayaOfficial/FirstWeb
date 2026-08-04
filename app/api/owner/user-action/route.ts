@@ -32,9 +32,13 @@ export async function POST(req: Request) {
 
     // Update status di profiles
     const newStatus = action === 'approved' ? 'approved' : 'rejected';
+    const updateData: Record<string, unknown> = { status: newStatus };
+    if (action === 'approved') {
+      updateData.approved_at = new Date().toISOString();
+    }
     const { error: updateError } = await serviceSupabase
       .from('profiles')
-      .update({ status: newStatus })
+      .update(updateData)
       .eq('id', userId);
 
     if (updateError) {
