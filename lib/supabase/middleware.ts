@@ -90,32 +90,44 @@ export async function updateSession(request: NextRequest) {
 
     // Owner selalu bisa akses
     if (role !== 'owner') {
-      // Prioritas 1: Baca status dari user_metadata (JWT — paling reliable di Edge)
-      let status = user.user_metadata?.status;
-      let profileRole: string | undefined;
+      let userStatus: string | undefined;
 
-      // Prioritas 2: Fallback ke query profiles jika metadata belum ada
-      if (!status) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('status, role')
-          .eq('id', user.id)
-          .single();
-
-        status = profile?.status;
-        profileRole = profile?.role;
+      // Direct fetch ke Supabase REST API dengan service role key (bypass RLS, reliable di Edge)
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (serviceKey && supabaseUrl) {
+        try {
+          const res = await fetch(
+            `${supabaseUrl}/rest/v1/profiles?select=status,role&id=eq.${user.id}&limit=1`,
+            {
+              headers: {
+                'apikey': serviceKey,
+                'Authorization': `Bearer ${serviceKey}`,
+                'Accept': 'application/json',
+              },
+              cache: 'no-store',
+            }
+          );
+          if (res.ok) {
+            const profiles = await res.json();
+            const profile = profiles?.[0];
+            if (profile) {
+              // Owner di profiles juga bisa akses
+              if (profile.role === 'owner') {
+                return supabaseResponse;
+              }
+              userStatus = profile.status;
+            }
+          }
+        } catch (e) {
+          console.error('[middleware] profile fetch error:', e);
+        }
       }
 
-      // Owner di profiles juga bisa akses
-      if (profileRole === 'owner') {
-        // skip — owner boleh masuk
-      } else {
-        const finalStatus = status || 'pending';
-        if (finalStatus !== 'active' && finalStatus !== 'approved') {
-          const url = request.nextUrl.clone();
-          url.pathname = '/pending';
-          return NextResponse.redirect(url);
-        }
+      const finalStatus = userStatus || 'pending';
+      if (finalStatus !== 'active' && finalStatus !== 'approved') {
+        const url = request.nextUrl.clone();
+        url.pathname = '/pending';
+        return NextResponse.redirect(url);
       }
     }
   }
