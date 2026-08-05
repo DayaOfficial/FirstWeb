@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ChevronRight, User, LayoutDashboard, KeyRound, LogOut,
-  Search, Filter, Camera, Trash2, Package, Loader2
+  Search, Filter, Camera, Trash2, Package, Loader2,
+  Eye, EyeOff, X, CheckCircle2, AlertCircle, ShieldCheck
 } from 'lucide-react';
 import { formatRupiah, formatDate } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -83,6 +84,55 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
   const [showCount, setShowCount] = useState(10);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Password change modal state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwShowCurrent, setPwShowCurrent] = useState(false);
+  const [pwShowNew, setPwShowNew] = useState(false);
+  const [pwShowConfirm, setPwShowConfirm] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
+
+  const resetPasswordForm = () => {
+    setPwCurrent(''); setPwNew(''); setPwConfirm('');
+    setPwShowCurrent(false); setPwShowNew(false); setPwShowConfirm(false);
+    setPwError(''); setPwSuccess(false); setPwLoading(false);
+  };
+
+  const openPasswordModal = () => { resetPasswordForm(); setShowPasswordModal(true); };
+  const closePasswordModal = () => { setShowPasswordModal(false); resetPasswordForm(); };
+
+  // Client-side validation
+  const pwNewValid = pwNew.length >= 8 && /[A-Z]/.test(pwNew) && /[0-9]/.test(pwNew);
+  const pwConfirmMatch = pwNew === pwConfirm && pwConfirm.length > 0;
+  const pwSameAsOld = pwCurrent.length > 0 && pwNew === pwCurrent;
+  const pwFormValid = pwCurrent.length > 0 && pwNewValid && pwConfirmMatch && !pwSameAsOld;
+
+  const handleChangePassword = async () => {
+    if (!pwFormValid) return;
+    setPwLoading(true); setPwError('');
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: pwCurrent, newPassword: pwNew }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPwSuccess(true);
+        setTimeout(() => closePasswordModal(), 2000);
+      } else {
+        setPwError(data.error || 'Gagal mengubah password.');
+      }
+    } catch {
+      setPwError('Terjadi kesalahan jaringan. Coba lagi.');
+    }
+    setPwLoading(false);
+  };
 
   // Auto-scroll ke section berdasarkan hash (#riwayat, #pengaturan)
   useEffect(() => {
@@ -317,7 +367,7 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
       <section id="pengaturan" className="space-y-3 scroll-mt-20">
         <h2 className="text-lg font-bold text-on-surface font-[family-name:var(--font-heading)]">Pengaturan Akun</h2>
         <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-soft overflow-hidden divide-y divide-outline-variant/30">
-          <button className="w-full px-5 py-4 flex items-center gap-3 hover:bg-surface-container-low transition-colors group">
+          <button onClick={openPasswordModal} className="w-full px-5 py-4 flex items-center gap-3 hover:bg-surface-container-low transition-colors group">
             <KeyRound size={20} className="text-on-surface-variant group-hover:text-primary transition-colors" />
             <span className="flex-1 text-sm font-semibold text-on-surface text-left">Ubah Password</span>
             <ChevronRight size={16} className="text-on-surface-variant" />
@@ -329,6 +379,106 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
           </button>
         </div>
       </section>
+
+      {/* Password Change Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in" onClick={closePasswordModal}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-xl border border-outline-variant/30 w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-outline-variant/30">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={20} className="text-primary" />
+                <h3 className="text-lg font-bold text-on-surface font-[family-name:var(--font-heading)]">Ubah Password</h3>
+              </div>
+              <button onClick={closePasswordModal} className="p-1.5 rounded-full hover:bg-surface-container-high text-on-surface-variant transition-colors"><X size={18} /></button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              {/* Success */}
+              {pwSuccess && (
+                <div className="flex items-center gap-3 p-4 bg-accent-green/10 border border-accent-green/30 rounded-xl animate-fade-in">
+                  <CheckCircle2 size={20} className="text-accent-green shrink-0" />
+                  <p className="text-sm font-semibold text-accent-green">Password berhasil diubah!</p>
+                </div>
+              )}
+
+              {/* Error */}
+              {pwError && (
+                <div className="flex items-center gap-3 p-4 bg-error/10 border border-error/30 rounded-xl animate-fade-in">
+                  <AlertCircle size={20} className="text-error shrink-0" />
+                  <p className="text-sm text-error">{pwError}</p>
+                </div>
+              )}
+
+              {!pwSuccess && (
+                <>
+                  {/* Password Lama */}
+                  <div>
+                    <label className="block text-sm font-semibold text-on-surface mb-1.5">Password Lama</label>
+                    <div className="relative">
+                      <input type={pwShowCurrent ? 'text' : 'password'} value={pwCurrent} onChange={e => setPwCurrent(e.target.value)}
+                        placeholder="Masukkan password lama"
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 pr-12 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                      <button type="button" onClick={() => setPwShowCurrent(!pwShowCurrent)} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary transition-colors">
+                        {pwShowCurrent ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Password Baru */}
+                  <div>
+                    <label className="block text-sm font-semibold text-on-surface mb-1.5">Password Baru</label>
+                    <div className="relative">
+                      <input type={pwShowNew ? 'text' : 'password'} value={pwNew} onChange={e => setPwNew(e.target.value)}
+                        placeholder="Minimal 8 karakter, huruf besar & angka"
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 pr-12 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                      <button type="button" onClick={() => setPwShowNew(!pwShowNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary transition-colors">
+                        {pwShowNew ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    {pwNew.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className={`text-xs flex items-center gap-1 ${pwNew.length >= 8 ? 'text-accent-green' : 'text-on-surface-variant'}`}>
+                          {pwNew.length >= 8 ? <CheckCircle2 size={12} /> : <span className="w-3 h-3 rounded-full border border-outline-variant inline-block" />} Minimal 8 karakter
+                        </p>
+                        <p className={`text-xs flex items-center gap-1 ${/[A-Z]/.test(pwNew) ? 'text-accent-green' : 'text-on-surface-variant'}`}>
+                          {/[A-Z]/.test(pwNew) ? <CheckCircle2 size={12} /> : <span className="w-3 h-3 rounded-full border border-outline-variant inline-block" />} Mengandung huruf besar
+                        </p>
+                        <p className={`text-xs flex items-center gap-1 ${/[0-9]/.test(pwNew) ? 'text-accent-green' : 'text-on-surface-variant'}`}>
+                          {/[0-9]/.test(pwNew) ? <CheckCircle2 size={12} /> : <span className="w-3 h-3 rounded-full border border-outline-variant inline-block" />} Mengandung angka
+                        </p>
+                      </div>
+                    )}
+                    {pwSameAsOld && <p className="text-xs text-error mt-1">Password baru harus berbeda dari yang lama.</p>}
+                  </div>
+
+                  {/* Konfirmasi */}
+                  <div>
+                    <label className="block text-sm font-semibold text-on-surface mb-1.5">Konfirmasi Password Baru</label>
+                    <div className="relative">
+                      <input type={pwShowConfirm ? 'text' : 'password'} value={pwConfirm} onChange={e => setPwConfirm(e.target.value)}
+                        placeholder="Ketik ulang password baru"
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 pr-12 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                      <button type="button" onClick={() => setPwShowConfirm(!pwShowConfirm)} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary transition-colors">
+                        {pwShowConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    {pwConfirm.length > 0 && !pwConfirmMatch && <p className="text-xs text-error mt-1">Konfirmasi password tidak sama.</p>}
+                  </div>
+
+                  {/* Submit */}
+                  <button onClick={handleChangePassword} disabled={!pwFormValid || pwLoading}
+                    className="w-full py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    {pwLoading ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />}
+                    {pwLoading ? 'Memproses...' : 'Simpan Password'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

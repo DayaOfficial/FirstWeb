@@ -8,22 +8,15 @@ import {
   ChevronRight, ChevronLeft, ArrowRight, Flame
 } from 'lucide-react';
 
-/* ─── Banner type from localStorage ─── */
+/* ─── Banner type from database ─── */
 interface BannerSlide {
   type: 'image';
-  imageData: string;
+  image_url: string;
   title: string;
+  link?: string;
 }
 
-interface TextSlide {
-  type: 'text';
-  tag: string;
-  title: React.ReactNode;
-  desc: string;
-  cta: string;
-}
-
-type Slide = BannerSlide | TextSlide;
+type Slide = BannerSlide;
 
 /* ─── Hero Carousel ─── */
 function HeroCarousel() {
@@ -31,25 +24,22 @@ function HeroCarousel() {
   const [slides, setSlides] = useState<Slide[]>([]);
 
   useEffect(() => {
-    // Load banners from localStorage (added by owner)
-    try {
-      const stored = JSON.parse(localStorage.getItem('daya_banners') || '[]');
-      const activeBanners = stored
-        .filter((b: { isActive: boolean }) => b.isActive)
-        .sort((a: { sortOrder: number }, b: { sortOrder: number }) => a.sortOrder - b.sortOrder);
-
-      if (activeBanners.length > 0) {
-        const bannerSlides: BannerSlide[] = activeBanners.map((b: { imageData: string; title: string }) => ({
-          type: 'image' as const,
-          imageData: b.imageData,
-          title: b.title,
-        }));
-        setSlides(bannerSlides);
-        setCurrent(0);
-      }
-    } catch {
-      // No banners
-    }
+    // Load banners from database API
+    fetch('/api/banners')
+      .then(res => res.json())
+      .then((data: { image_url: string; title: string; link?: string }[]) => {
+        if (data && data.length > 0) {
+          const bannerSlides: BannerSlide[] = data.map(b => ({
+            type: 'image' as const,
+            image_url: b.image_url,
+            title: b.title,
+            link: b.link,
+          }));
+          setSlides(bannerSlides);
+          setCurrent(0);
+        }
+      })
+      .catch(() => { /* no banners */ });
   }, []);
 
   // Auto-play
@@ -85,7 +75,7 @@ function HeroCarousel() {
       {currentSlide.type === 'image' && (
         <div className="relative w-full h-full">
           <img
-            src={currentSlide.imageData}
+            src={currentSlide.image_url}
             alt={currentSlide.title}
             className="w-full h-full object-cover transition-opacity duration-500"
           />

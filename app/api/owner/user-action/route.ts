@@ -24,16 +24,22 @@ export async function POST(req: Request) {
 
     const { userId, action } = await req.json();
 
-    if (!userId || !['approved', 'rejected'].includes(action)) {
+    if (!userId || !['approved', 'rejected', 'blocked', 'unblocked'].includes(action)) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
 
     const serviceSupabase = createServiceClient();
 
-    // Update status di profiles
-    const newStatus = action === 'approved' ? 'approved' : 'rejected';
+    // Map action ke status
+    const statusMap: Record<string, string> = {
+      approved: 'approved',
+      rejected: 'rejected',
+      blocked: 'blocked',
+      unblocked: 'approved', // unblock = kembali ke approved
+    };
+    const newStatus = statusMap[action];
     const updateData: Record<string, unknown> = { status: newStatus };
-    if (action === 'approved') {
+    if (action === 'approved' || action === 'unblocked') {
       updateData.approved_at = new Date().toISOString();
     }
     const { error: updateError } = await serviceSupabase

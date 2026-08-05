@@ -124,9 +124,10 @@ export async function updateSession(request: NextRequest) {
       }
 
       const finalStatus = userStatus || 'pending';
+      // Hanya 'active' dan 'approved' yang boleh masuk. Blocked/pending/rejected → redirect
       if (finalStatus !== 'active' && finalStatus !== 'approved') {
         const url = request.nextUrl.clone();
-        url.pathname = '/pending';
+        url.pathname = finalStatus === 'blocked' ? '/pending' : '/pending';
         return NextResponse.redirect(url);
       }
     }
