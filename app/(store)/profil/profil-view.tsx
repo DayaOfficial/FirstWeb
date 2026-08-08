@@ -225,85 +225,88 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
         <User size={28} /> Profil Saya
       </h1>
 
-      {/* Profile Card */}
+      {/* Profile Card — Redesigned */}
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-soft overflow-hidden">
-        <div className="gradient-primary h-24 relative" />
-        <div className="px-6 pb-6 -mt-12 relative z-10">
-          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
-            {/* Avatar */}
+        {/* Gradient Banner — taller */}
+        <div className="gradient-primary h-28 relative" />
+
+        {/* Content area — avatar overlapping gradient edge */}
+        <div className="px-6 pb-6 relative">
+          {/* Avatar — centered, overlaps gradient by ~60% */}
+          <div className="flex justify-center sm:justify-start -mt-14 mb-4">
             <div className="relative group">
               {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt="Avatar" className="w-20 h-20 rounded-full border-4 border-surface-container-lowest object-cover shadow-soft" />
+                <img src={profile.avatar_url} alt="Avatar"
+                  className="w-24 h-24 rounded-full border-[5px] border-surface-container-lowest object-cover shadow-lg" />
               ) : (
-                <div className="w-20 h-20 rounded-full border-4 border-surface-container-lowest bg-surface-container-high flex items-center justify-center shadow-soft">
-                  <span className="text-2xl font-bold text-on-surface-variant/60">{profile.username.charAt(0).toUpperCase()}</span>
+                <div className="w-24 h-24 rounded-full border-[5px] border-surface-container-lowest bg-surface-container-high flex items-center justify-center shadow-lg">
+                  <span className="text-3xl font-bold text-on-surface-variant/60">{profile.username.charAt(0).toUpperCase()}</span>
                 </div>
               )}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="absolute bottom-0 right-0 w-7 h-7 rounded-full gradient-primary flex items-center justify-center text-white shadow-md hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="absolute bottom-1 right-1 w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-white shadow-md hover:opacity-90 transition-opacity disabled:opacity-50 ring-2 ring-surface-container-lowest"
               >
                 {uploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
               </button>
               <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleAvatarUpload} className="hidden" />
             </div>
+          </div>
 
-            {/* Info */}
-            <div className="flex-1">
-              <h2 className="text-lg font-bold text-on-surface font-[family-name:var(--font-heading)]">{profile.username}</h2>
-              <p className="text-sm text-on-surface-variant">{profile.email}</p>
+          {/* Name & Email — fully in white area, centered on mobile */}
+          <div className="text-center sm:text-left mb-6">
+            <h2 className="text-xl font-bold text-on-surface font-[family-name:var(--font-heading)]">{profile.username}</h2>
+            <p className="text-sm text-on-surface-variant mt-0.5">{profile.email}</p>
+          </div>
+
+          {/* Info Grid — 4 columns, separated by border */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 rounded-xl border border-outline-variant/30 overflow-hidden mb-6">
+            <div className="p-4 text-center border-r border-b sm:border-b-0 border-outline-variant/30">
+              <p className="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1">Member Sejak</p>
+              <p className="text-sm font-bold text-on-surface">{new Date(profile.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
             </div>
-
-            {/* Actions */}
-            <div className="flex gap-2">
-              {profile.avatar_url && (
-                <button onClick={handleRemoveAvatar} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-error hover:bg-error/5 transition-colors flex items-center gap-1">
-                  <Trash2 size={12} /> Hapus Foto
-                </button>
-              )}
+            <div className="p-4 text-center border-b sm:border-b-0 sm:border-r border-outline-variant/30">
+              <p className="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1">Status</p>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${(profile.status === 'approved' || profile.status === 'active') ? 'bg-accent-green/10 text-accent-green border border-accent-green/30' : 'bg-amber-100 text-amber-700 border border-amber-300'}`}>
+                {(profile.status === 'approved' || profile.status === 'active') ? '● Aktif' : profile.status === 'pending' ? '● Menunggu' : (profile.status || '● Aktif')}
+              </span>
+            </div>
+            <div className="p-4 text-center border-r border-outline-variant/30">
+              <p className="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1">Total Transaksi</p>
+              <p className="text-sm font-bold text-on-surface">{orders.length}</p>
+            </div>
+            <div className="p-4 text-center">
+              <p className="text-[11px] text-on-surface-variant uppercase tracking-wider mb-1">Total Belanja</p>
+              <p className="text-sm font-bold text-primary">{formatRupiah(orders.reduce((sum, o) => sum + (o.amount || 0), 0))}</p>
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div>
-              <p className="text-xs text-on-surface-variant">Username</p>
-              <p className="text-sm font-semibold text-on-surface">{profile.username}</p>
-            </div>
-            <div>
-              <p className="text-xs text-on-surface-variant">Email</p>
-              <p className="text-sm font-semibold text-on-surface">{profile.email}</p>
-            </div>
-            <div>
-              <p className="text-xs text-on-surface-variant">Member Sejak</p>
-              <p className="text-sm font-semibold text-on-surface">{new Date(profile.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-            </div>
-            <div>
-              <p className="text-xs text-on-surface-variant">Status</p>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${(profile.status === 'approved' || profile.status === 'active') ? 'bg-accent-green/10 text-accent-green border border-accent-green/30' : 'bg-amber-100 text-amber-700 border border-amber-300'}`}>
-                {(profile.status === 'approved' || profile.status === 'active') ? 'Aktif' : profile.status === 'pending' ? 'Menunggu' : (profile.status || 'Aktif')}
-              </span>
-            </div>
+          {/* Action Buttons Row */}
+          <div className="flex flex-wrap gap-2">
+            {profile.avatar_url && (
+              <button onClick={handleRemoveAvatar}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold text-on-surface-variant bg-surface-container-high hover:bg-surface-container border border-outline-variant/30 transition-colors">
+                <Trash2 size={14} /> Hapus Foto
+              </button>
+            )}
+            <button onClick={openPasswordModal}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold text-on-surface-variant bg-surface-container-high hover:bg-surface-container border border-outline-variant/30 transition-colors">
+              <KeyRound size={14} /> Ganti Password
+            </button>
+            {isOwner && (
+              <Link href="/panel/x7k9m2-daya-owner"
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold text-white gradient-primary shadow-sm hover:opacity-90 transition-opacity">
+                <LayoutDashboard size={14} /> Panel Owner
+              </Link>
+            )}
+            <button onClick={handleLogout}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold text-error bg-error/5 hover:bg-error/10 border border-error/20 transition-colors ml-auto">
+              <LogOut size={14} /> Keluar
+            </button>
           </div>
         </div>
       </div>
-
-      {/* Owner Panel Button */}
-      {isOwner && (
-        <Link href="/panel/x7k9m2-daya-owner"
-          className="block bg-gradient-to-r from-primary via-primary-container to-pink-500 rounded-xl p-5 text-white shadow-soft hover:opacity-95 transition-opacity group">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/15 rounded-lg backdrop-blur-sm">
-              <LayoutDashboard size={22} />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-sm font-[family-name:var(--font-heading)]">Masuk Owner Control Panel</h3>
-              <p className="text-xs text-white/70">Kelola produk, pesanan, dan pengaturan toko</p>
-            </div>
-            <ChevronRight size={20} className="text-white/60 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
-      )}
 
       {/* Riwayat Transaksi */}
       <section id="riwayat" className="space-y-4 scroll-mt-20">
@@ -361,23 +364,6 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
             Muat Lebih Banyak
           </button>
         )}
-      </section>
-
-      {/* Pengaturan Akun */}
-      <section id="pengaturan" className="space-y-3 scroll-mt-20">
-        <h2 className="text-lg font-bold text-on-surface font-[family-name:var(--font-heading)]">Pengaturan Akun</h2>
-        <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-soft overflow-hidden divide-y divide-outline-variant/30">
-          <button onClick={openPasswordModal} className="w-full px-5 py-4 flex items-center gap-3 hover:bg-surface-container-low transition-colors group">
-            <KeyRound size={20} className="text-on-surface-variant group-hover:text-primary transition-colors" />
-            <span className="flex-1 text-sm font-semibold text-on-surface text-left">Ubah Password</span>
-            <ChevronRight size={16} className="text-on-surface-variant" />
-          </button>
-          <button onClick={handleLogout} className="w-full px-5 py-4 flex items-center gap-3 hover:bg-error/5 transition-colors group">
-            <LogOut size={20} className="text-on-surface-variant group-hover:text-error transition-colors" />
-            <span className="flex-1 text-sm font-semibold text-on-surface text-left group-hover:text-error transition-colors">Keluar</span>
-            <ChevronRight size={16} className="text-on-surface-variant" />
-          </button>
-        </div>
       </section>
 
       {/* Password Change Modal */}

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   Home, Package, ShoppingCart, Users, Image, Bell,
   Settings, BarChart3, Link2, Menu, X, LogOut,
-  ShieldCheck, HelpCircle, Wallet
+  ShieldCheck, HelpCircle, Wallet, Gamepad2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
@@ -16,6 +16,7 @@ const panelNav = [
   { icon: Home, label: 'Dashboard', href: '/panel/x7k9m2-daya-owner', exact: true },
   { icon: Link2, label: 'Koneksi API', href: '/panel/x7k9m2-daya-owner/api' },
   { icon: Package, label: 'Produk', href: '/panel/x7k9m2-daya-owner/produk' },
+  { icon: Gamepad2, label: 'Top Up Game', href: '/panel/x7k9m2-daya-owner/topup-game' },
   { icon: ShieldCheck, label: 'Nokos', href: '/panel/x7k9m2-daya-owner/nokos' },
   { icon: Image, label: 'Banner', href: '/panel/x7k9m2-daya-owner/banner' },
   { icon: ShoppingCart, label: 'Pesanan', href: '/panel/x7k9m2-daya-owner/pesanan' },
