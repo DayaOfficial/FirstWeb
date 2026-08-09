@@ -5,53 +5,17 @@ import Link from 'next/link';
 import { ChevronRight, ShieldCheck, ArrowLeft, Package, MessageCircle } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import BrandImage from '@/components/ui/BrandImage';
+import { createClient } from '@/lib/supabase/client';
 import type { NokosApp, NokosCountry } from '@/types';
 
-/* ─── Default seed data ─── */
+/* ─── Default seed data (fallback) ─── */
 const DEFAULT_APPS: NokosApp[] = [
   { id: 'nk-1', name: 'Telegram', logoUrl: '', description: 'Nomor kosong Telegram untuk registrasi.', isActive: true, sortOrder: 0 },
   { id: 'nk-2', name: 'WhatsApp', logoUrl: '', description: 'Nomor kosong WhatsApp untuk verifikasi.', isActive: true, sortOrder: 1 },
-  { id: 'nk-3', name: 'Shopee', logoUrl: '', description: 'Nomor kosong Shopee untuk membuat akun baru.', isActive: true, sortOrder: 2 },
-  { id: 'nk-4', name: 'TikTok', logoUrl: '', description: 'Nomor kosong TikTok untuk registrasi.', isActive: true, sortOrder: 3 },
-  { id: 'nk-5', name: 'Instagram', logoUrl: '', description: 'Nomor kosong Instagram untuk verifikasi.', isActive: true, sortOrder: 4 },
-  { id: 'nk-6', name: 'Facebook', logoUrl: '', description: 'Nomor kosong Facebook untuk registrasi.', isActive: true, sortOrder: 5 },
-  { id: 'nk-7', name: 'Gmail', logoUrl: '', description: 'Nomor kosong Gmail untuk verifikasi akun Google.', isActive: true, sortOrder: 6 },
-  { id: 'nk-8', name: 'Discord', logoUrl: '', description: 'Nomor kosong Discord untuk verifikasi.', isActive: true, sortOrder: 7 },
 ];
 
 const DEFAULT_COUNTRIES: NokosCountry[] = [
-  // Telegram
-  { id: 'nc-1', appId: 'nk-1', countryCode: 'ID', countryName: 'Indonesia', flagEmoji: '🇮🇩', price: 5000, stock: 15, description: 'Nomor +62, bisa SMS & panggilan.', isActive: true },
-  { id: 'nc-2', appId: 'nk-1', countryCode: 'US', countryName: 'Amerika', flagEmoji: '🇺🇸', price: 7000, stock: 8, description: 'Nomor +1, bisa SMS.', isActive: true },
-  { id: 'nc-3', appId: 'nk-1', countryCode: 'GB', countryName: 'Inggris', flagEmoji: '🇬🇧', price: 6000, stock: 0, description: 'Nomor +44, bisa SMS.', isActive: true },
-  { id: 'nc-4', appId: 'nk-1', countryCode: 'MY', countryName: 'Malaysia', flagEmoji: '🇲🇾', price: 5000, stock: 20, description: 'Nomor +60, bisa SMS.', isActive: true },
-  { id: 'nc-5', appId: 'nk-1', countryCode: 'SG', countryName: 'Singapura', flagEmoji: '🇸🇬', price: 8000, stock: 5, description: 'Nomor +65.', isActive: true },
-  { id: 'nc-6', appId: 'nk-1', countryCode: 'JP', countryName: 'Jepang', flagEmoji: '🇯🇵', price: 9000, stock: 12, description: 'Nomor +81.', isActive: true },
-  { id: 'nc-7', appId: 'nk-1', countryCode: 'IN', countryName: 'India', flagEmoji: '🇮🇳', price: 4000, stock: 0, description: 'Nomor +91.', isActive: true },
-  { id: 'nc-8', appId: 'nk-1', countryCode: 'BR', countryName: 'Brazil', flagEmoji: '🇧🇷', price: 5000, stock: 3, description: 'Nomor +55.', isActive: true },
-  { id: 'nc-9', appId: 'nk-1', countryCode: 'DE', countryName: 'Jerman', flagEmoji: '🇩🇪', price: 7000, stock: 7, description: 'Nomor +49.', isActive: true },
-  // WhatsApp
-  { id: 'nc-10', appId: 'nk-2', countryCode: 'ID', countryName: 'Indonesia', flagEmoji: '🇮🇩', price: 4000, stock: 20, description: 'Nomor +62, siap pakai WhatsApp.', isActive: true },
-  { id: 'nc-11', appId: 'nk-2', countryCode: 'US', countryName: 'Amerika', flagEmoji: '🇺🇸', price: 6000, stock: 10, description: 'Nomor +1.', isActive: true },
-  { id: 'nc-12', appId: 'nk-2', countryCode: 'MY', countryName: 'Malaysia', flagEmoji: '🇲🇾', price: 5000, stock: 8, description: 'Nomor +60.', isActive: true },
-  // Shopee
-  { id: 'nc-13', appId: 'nk-3', countryCode: 'ID', countryName: 'Indonesia', flagEmoji: '🇮🇩', price: 8000, stock: 5, description: 'Nomor +62 untuk Shopee.', isActive: true },
-  { id: 'nc-14', appId: 'nk-3', countryCode: 'MY', countryName: 'Malaysia', flagEmoji: '🇲🇾', price: 9000, stock: 3, description: 'Nomor +60 untuk Shopee.', isActive: true },
-  // TikTok
-  { id: 'nc-15', appId: 'nk-4', countryCode: 'ID', countryName: 'Indonesia', flagEmoji: '🇮🇩', price: 6000, stock: 12, description: 'Nomor +62 untuk TikTok.', isActive: true },
-  { id: 'nc-16', appId: 'nk-4', countryCode: 'US', countryName: 'Amerika', flagEmoji: '🇺🇸', price: 8000, stock: 6, description: 'Nomor +1 untuk TikTok.', isActive: true },
-  // Instagram (all out of stock)
-  { id: 'nc-17', appId: 'nk-5', countryCode: 'ID', countryName: 'Indonesia', flagEmoji: '🇮🇩', price: 7000, stock: 0, description: 'Nomor +62 untuk Instagram.', isActive: true },
-  { id: 'nc-18', appId: 'nk-5', countryCode: 'US', countryName: 'Amerika', flagEmoji: '🇺🇸', price: 9000, stock: 0, description: 'Nomor +1 untuk Instagram.', isActive: true },
-  // Facebook
-  { id: 'nc-19', appId: 'nk-6', countryCode: 'ID', countryName: 'Indonesia', flagEmoji: '🇮🇩', price: 5000, stock: 8, description: 'Nomor +62 untuk Facebook.', isActive: true },
-  { id: 'nc-20', appId: 'nk-6', countryCode: 'IN', countryName: 'India', flagEmoji: '🇮🇳', price: 4000, stock: 15, description: 'Nomor +91 untuk Facebook.', isActive: true },
-  // Gmail
-  { id: 'nc-21', appId: 'nk-7', countryCode: 'ID', countryName: 'Indonesia', flagEmoji: '🇮🇩', price: 4000, stock: 25, description: 'Nomor +62 untuk Gmail.', isActive: true },
-  { id: 'nc-22', appId: 'nk-7', countryCode: 'US', countryName: 'Amerika', flagEmoji: '🇺🇸', price: 5000, stock: 18, description: 'Nomor +1 untuk Gmail.', isActive: true },
-  // Discord
-  { id: 'nc-23', appId: 'nk-8', countryCode: 'ID', countryName: 'Indonesia', flagEmoji: '🇮🇩', price: 5000, stock: 10, description: 'Nomor +62 untuk Discord.', isActive: true },
-  { id: 'nc-24', appId: 'nk-8', countryCode: 'US', countryName: 'Amerika', flagEmoji: '🇺🇸', price: 6000, stock: 7, description: 'Nomor +1 untuk Discord.', isActive: true },
+  { id: 'nc-1', appId: 'nk-1', countryCode: 'ID', countryName: 'Indonesia', flagEmoji: '🇮🇩', price: 5000, stock: 15, description: 'Nomor +62', isActive: true },
 ];
 
 function getStockColor(stock: number) {
@@ -77,21 +41,33 @@ export default function NokosPage() {
   const [buyerPhone, setBuyerPhone] = useState('');
   const [buySuccess, setBuySuccess] = useState(false);
 
+  // Load from Supabase
   useEffect(() => {
-    const storedApps = localStorage.getItem('daya_nokos_apps');
-    const storedCountries = localStorage.getItem('daya_nokos_countries');
-    if (storedApps) {
-      setApps(JSON.parse(storedApps));
-    } else {
-      setApps(DEFAULT_APPS);
-      localStorage.setItem('daya_nokos_apps', JSON.stringify(DEFAULT_APPS));
-    }
-    if (storedCountries) {
-      setCountries(JSON.parse(storedCountries));
-    } else {
-      setCountries(DEFAULT_COUNTRIES);
-      localStorage.setItem('daya_nokos_countries', JSON.stringify(DEFAULT_COUNTRIES));
-    }
+    const loadData = async () => {
+      const supabase = createClient();
+      const { data: appsData } = await supabase.from('nokos_apps').select('*').eq('is_active', true).order('sort_order');
+      const { data: countriesData } = await supabase.from('nokos_countries').select('*').eq('is_active', true).order('country_name');
+
+      if (appsData && appsData.length > 0) {
+        setApps(appsData.map((a: Record<string, unknown>) => ({
+          id: a.id as string, name: a.name as string, logoUrl: (a.logo_url as string) || '',
+          description: (a.description as string) || '', isActive: true, sortOrder: (a.sort_order as number) || 0
+        })));
+      } else {
+        setApps(DEFAULT_APPS);
+      }
+
+      if (countriesData && countriesData.length > 0) {
+        setCountries(countriesData.map((c: Record<string, unknown>) => ({
+          id: c.id as string, appId: c.app_id as string, countryCode: c.country_code as string,
+          countryName: c.country_name as string, flagEmoji: (c.flag_emoji as string) || '',
+          price: Number(c.price), stock: c.stock as number, description: (c.description as string) || '', isActive: true
+        })));
+      } else {
+        setCountries(DEFAULT_COUNTRIES);
+      }
+    };
+    loadData();
   }, []);
 
   const activeApps = apps.filter(a => a.isActive).sort((a, b) => a.sortOrder - b.sortOrder);
@@ -108,30 +84,27 @@ export default function NokosPage() {
     return appCs.length > 0 && appCs.every(c => c.stock === 0);
   }, [countries]);
 
-  const handleBuy = () => {
+  const handleBuy = async () => {
     if (!buyerName.trim() || !buyerPhone.trim() || !selectedCountry) return;
-    // Decrease stock
-    const updated = countries.map(c =>
-      c.id === selectedCountry.id ? { ...c, stock: Math.max(0, c.stock - 1) } : c
-    );
-    setCountries(updated);
-    localStorage.setItem('daya_nokos_countries', JSON.stringify(updated));
 
-    // Save order to localStorage
-    const orders = JSON.parse(localStorage.getItem('daya_orders') || '[]');
+    const supabase = createClient();
+    // Decrease stock in Supabase
+    const newStock = Math.max(0, selectedCountry.stock - 1);
+    await supabase.from('nokos_countries').update({ stock: newStock }).eq('id', selectedCountry.id);
+    setCountries(prev => prev.map(c => c.id === selectedCountry.id ? { ...c, stock: newStock } : c));
+
+    // Save order to Supabase
     const orderCode = `DM-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
-    orders.push({
-      id: crypto.randomUUID(),
-      orderCode,
-      productName: `Nokos ${selectedApp?.name} - ${selectedCountry.countryName}`,
+    await supabase.from('orders').insert({
+      order_code: orderCode,
+      product_name: `Nokos ${selectedApp?.name} - ${selectedCountry.countryName}`,
       module: 'nokos',
       amount: selectedCountry.price,
-      status: 'diproses',
-      createdAt: new Date().toISOString(),
-      buyerName: buyerName.trim(),
-      buyerPhone: buyerPhone.trim(),
+      process_status: 'waiting',
+      payment_status: 'pending',
+      buyer_name: buyerName.trim(),
+      buyer_phone: buyerPhone.trim(),
     });
-    localStorage.setItem('daya_orders', JSON.stringify(orders));
 
     setBuySuccess(true);
     setTimeout(() => setBuySuccess(false), 5000);

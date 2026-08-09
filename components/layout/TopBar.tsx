@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, Bell, User, Settings, LayoutDashboard, LogOut } from 'lucide-react';
+import { Search, Bell, User, Settings, LayoutDashboard, LogOut, Menu } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useSidebarToggle } from './Sidebar';
 
 interface UserSession {
   id: string;
@@ -21,6 +22,10 @@ export default function TopBar() {
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Get sidebar toggle from context
+  let sidebarToggle: { open: () => void } = { open: () => {} };
+  try { sidebarToggle = useSidebarToggle(); } catch { /* context may not exist */ }
 
   useEffect(() => {
     const supabase = createClient();
@@ -120,116 +125,128 @@ export default function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-surface/80 backdrop-blur-md shadow-sm border-b border-outline-variant flex items-center justify-between px-6 lg:px-10 py-3">
-      {/* Search Bar */}
-      <div className="flex-1 max-w-md relative group">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search size={18} className="text-on-surface-variant group-focus-within:text-primary transition-colors" />
+    <header className="sticky top-0 z-40 bg-surface/80 backdrop-blur-md shadow-sm border-b border-outline-variant">
+      {/* Flex row: hamburger → search → bell → avatar */}
+      <div className="flex items-center gap-3 px-4 lg:px-10 py-3">
+        {/* Hamburger — only on mobile, 44×44 fixed size, NOT absolute */}
+        <button
+          onClick={() => sidebarToggle.open()}
+          className="lg:hidden w-11 h-11 shrink-0 rounded-full bg-surface-container-lowest border border-outline-variant/50 shadow-sm flex items-center justify-center text-primary hover:bg-primary/5 transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu size={22} />
+        </button>
+
+        {/* Search Bar — flex-1 with min-width 0 so it shrinks gracefully */}
+        <div className="flex-1 min-w-0 relative group">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search size={18} className="text-on-surface-variant group-focus-within:text-primary transition-colors" />
+          </div>
+          <input
+            type="text"
+            placeholder="Cari game atau produk..."
+            className="block w-full pl-10 pr-4 py-2.5 border border-outline-variant rounded-full leading-5 bg-surface-container-lowest placeholder-on-surface-variant text-sm
+            focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary focus:shadow-[0_0_10px_rgba(192,0,58,0.2)] transition-all duration-300"
+          />
         </div>
-        <input
-          type="text"
-          placeholder="Cari game atau produk..."
-          className="block w-full pl-10 pr-4 py-2 border border-outline-variant rounded-full leading-5 bg-surface-container-lowest placeholder-on-surface-variant text-sm
-          focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary focus:shadow-[0_0_10px_rgba(192,0,58,0.2)] transition-all duration-300"
-        />
-      </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2 ml-4">
-        {/* Bell — hanya untuk owner */}
-        {!loading && user && user.role === 'owner' && (
-          <Link
-            href="/panel/x7k9m2-daya-owner/notifikasi"
-            className="p-2 text-on-surface-variant hover:text-primary hover:bg-primary/5 rounded-full transition-colors duration-200 relative"
-          >
-            <Bell size={20} />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-pink-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </Link>
-        )}
-
-        {/* Not logged in */}
-        {!loading && !user && (
-          <Link href="/login"
-            className="px-4 py-2 rounded-full gradient-primary text-white font-semibold text-xs hover:opacity-90 transition-all shadow-sm">
-            Masuk
-          </Link>
-        )}
-
-        {/* Logged in — Avatar + Dropdown */}
-        {!loading && user && (
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="p-0.5 rounded-full hover:ring-2 hover:ring-primary/30 transition-all duration-200"
+        {/* Actions */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Bell — hanya untuk owner */}
+          {!loading && user && user.role === 'owner' && (
+            <Link
+              href="/panel/x7k9m2-daya-owner/user"
+              className="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/5 rounded-full transition-colors duration-200 relative"
             >
-              {user.avatar_url ? (
-                <img src={user.avatar_url} alt="Avatar" className="w-8 h-8 rounded-full object-cover" />
-              ) : (
-                <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold">
-                  {user.username.charAt(0).toUpperCase()}
-                </div>
+              <Bell size={20} />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-pink-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
               )}
-            </button>
+            </Link>
+          )}
 
-            {/* Dropdown Menu */}
-            {dropdownOpen && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-[0px_8px_30px_rgba(0,0,0,0.12)] overflow-hidden animate-fade-in z-50">
-                {/* User Info */}
-                <div className="px-4 py-3 border-b border-outline-variant/30 flex items-center gap-3">
-                  {user.avatar_url ? (
-                    <img src={user.avatar_url} alt="Avatar" className="w-9 h-9 rounded-full object-cover shrink-0" />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
-                      {user.username.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-on-surface truncate">{user.username}</p>
-                    <p className="text-xs text-on-surface-variant truncate">{user.email}</p>
-                  </div>
-                </div>
+          {/* Not logged in */}
+          {!loading && !user && (
+            <Link href="/login"
+              className="px-4 py-2 rounded-full gradient-primary text-white font-semibold text-xs hover:opacity-90 transition-all shadow-sm">
+              Masuk
+            </Link>
+          )}
 
-                {/* Owner Panel — PALING ATAS agar terlihat jelas */}
-                {user.role === 'owner' && (
-                  <div className="border-b border-outline-variant/30 py-1">
-                    <Link href="/panel/x7k9m2-daya-owner" onClick={() => setDropdownOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary font-semibold hover:bg-primary/5 transition-colors">
-                      <LayoutDashboard size={16} /> Owner Control Panel
-                    </Link>
+          {/* Logged in — Avatar + Dropdown */}
+          {!loading && user && (
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="p-0.5 rounded-full hover:ring-2 hover:ring-primary/30 transition-all duration-200"
+              >
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt="Avatar" className="w-9 h-9 rounded-full object-cover" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold">
+                    {user.username.charAt(0).toUpperCase()}
                   </div>
                 )}
+              </button>
 
-                {/* Links */}
-                <div className="py-1">
-                  <Link href="/profil" onClick={() => setDropdownOpen(false)}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-high transition-colors">
-                    <User size={16} className="text-on-surface-variant" /> Profil Saya
-                  </Link>
-                  <Link href="/profil#pengaturan" onClick={() => setDropdownOpen(false)}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-high transition-colors">
-                    <Settings size={16} className="text-on-surface-variant" /> Pengaturan
-                  </Link>
+              {/* Dropdown Menu */}
+              {dropdownOpen && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-[0px_8px_30px_rgba(0,0,0,0.12)] overflow-hidden animate-fade-in z-50">
+                  {/* User Info */}
+                  <div className="px-4 py-3 border-b border-outline-variant/30 flex items-center gap-3">
+                    {user.avatar_url ? (
+                      <img src={user.avatar_url} alt="Avatar" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
+                        {user.username.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-on-surface truncate">{user.username}</p>
+                      <p className="text-xs text-on-surface-variant truncate">{user.email}</p>
+                    </div>
+                  </div>
+
+                  {/* Owner Panel — PALING ATAS agar terlihat jelas */}
+                  {user.role === 'owner' && (
+                    <div className="border-b border-outline-variant/30 py-1">
+                      <Link href="/panel/x7k9m2-daya-owner" onClick={() => setDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-primary font-semibold hover:bg-primary/5 transition-colors">
+                        <LayoutDashboard size={16} /> Owner Control Panel
+                      </Link>
+                    </div>
+                  )}
+
+                  {/* Links */}
+                  <div className="py-1">
+                    <Link href="/profil" onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-high transition-colors">
+                      <User size={16} className="text-on-surface-variant" /> Profil Saya
+                    </Link>
+                    <Link href="/profil#pengaturan" onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-on-surface hover:bg-surface-container-high transition-colors">
+                      <Settings size={16} className="text-on-surface-variant" /> Pengaturan
+                    </Link>
+                  </div>
+
+                  {/* Logout */}
+                  <div className="border-t border-outline-variant/30 py-1">
+                    <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-error hover:bg-error/5 transition-colors">
+                      <LogOut size={16} /> Keluar
+                    </button>
+                  </div>
                 </div>
+              )}
+            </div>
+          )}
 
-                {/* Logout */}
-                <div className="border-t border-outline-variant/30 py-1">
-                  <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-error hover:bg-error/5 transition-colors">
-                    <LogOut size={16} /> Keluar
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Loading skeleton */}
-        {loading && (
-          <div className="w-8 h-8 rounded-full bg-surface-container-high animate-pulse" />
-        )}
+          {/* Loading skeleton */}
+          {loading && (
+            <div className="w-9 h-9 rounded-full bg-surface-container-high animate-pulse" />
+          )}
+        </div>
       </div>
     </header>
   );

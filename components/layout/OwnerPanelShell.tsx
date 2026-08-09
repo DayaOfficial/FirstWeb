@@ -4,27 +4,31 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Home, Package, ShoppingCart, Users, Image, Bell,
-  Settings, BarChart3, Link2, Menu, X, LogOut,
-  ShieldCheck, HelpCircle, Wallet, Gamepad2
+  Home, Package, ShoppingCart, Users, Image, Settings,
+  Link2, Menu, X, LogOut, ShieldCheck, HelpCircle,
+  Wallet, Gamepad2, Smartphone, Zap, CreditCard, Share2,
+  Bot, Crown, FileText, Search
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
 import { createClient } from '@/lib/supabase/client';
 
 const panelNav = [
-  { icon: Home, label: 'Dashboard', href: '/panel/x7k9m2-daya-owner', exact: true },
-  { icon: Link2, label: 'Koneksi API', href: '/panel/x7k9m2-daya-owner/api' },
-  { icon: Package, label: 'Produk', href: '/panel/x7k9m2-daya-owner/produk' },
-  { icon: Gamepad2, label: 'Top Up Game', href: '/panel/x7k9m2-daya-owner/topup-game' },
-  { icon: ShieldCheck, label: 'Nokos', href: '/panel/x7k9m2-daya-owner/nokos' },
-  { icon: Image, label: 'Banner', href: '/panel/x7k9m2-daya-owner/banner' },
-  { icon: ShoppingCart, label: 'Pesanan', href: '/panel/x7k9m2-daya-owner/pesanan' },
+  { icon: Home, label: 'Dasbor', href: '/panel/x7k9m2-daya-owner', exact: true },
+  { icon: Link2, label: 'Koneksi & API', href: '/panel/x7k9m2-daya-owner/api' },
   { icon: Wallet, label: 'Saldo Provider', href: '/panel/x7k9m2-daya-owner/saldo' },
-  { icon: Users, label: 'User', href: '/panel/x7k9m2-daya-owner/user' },
+  { icon: Gamepad2, label: 'Top Up Game', href: '/panel/x7k9m2-daya-owner/topup-game' },
+  { icon: Smartphone, label: 'Pulsa, Data & Token', href: '/panel/x7k9m2-daya-owner/pulsa-data-token' },
+  { icon: CreditCard, label: 'E-Wallet', href: '/panel/x7k9m2-daya-owner/ewallet' },
+  { icon: Share2, label: 'SMM Panel', href: '/panel/x7k9m2-daya-owner/smm-panel' },
+  { icon: Bot, label: 'Robux & Vilog', href: '/panel/x7k9m2-daya-owner/robux-vilog' },
+  { icon: ShieldCheck, label: 'Nokos', href: '/panel/x7k9m2-daya-owner/nokos' },
+  { icon: Crown, label: 'Aplikasi Premium', href: '/panel/x7k9m2-daya-owner/app-premium' },
+  { icon: FileText, label: 'Format Pesan', href: '/panel/x7k9m2-daya-owner/format-pesan' },
+  { icon: Users, label: 'Manajemen User', href: '/panel/x7k9m2-daya-owner/user' },
+  { icon: Image, label: 'Banner', href: '/panel/x7k9m2-daya-owner/banner' },
+  { icon: ShoppingCart, label: 'Transaksi', href: '/panel/x7k9m2-daya-owner/pesanan' },
   { icon: HelpCircle, label: 'Bantuan & FAQ', href: '/panel/x7k9m2-daya-owner/bantuan' },
-  { icon: Bell, label: 'Notifikasi', href: '/panel/x7k9m2-daya-owner/notifikasi' },
-  { icon: BarChart3, label: 'Laporan', href: '/panel/x7k9m2-daya-owner/laporan' },
   { icon: Settings, label: 'Pengaturan', href: '/panel/x7k9m2-daya-owner/pengaturan' },
 ];
 
@@ -83,21 +87,18 @@ export default function OwnerPanelShell({ ownerName, children }: { ownerName: st
   );
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-dvh bg-background">
       {/* Desktop Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-[280px] z-50 bg-surface border-r border-outline-variant shadow-sm hidden lg:flex flex-col p-6">
+      <aside className="fixed left-0 top-0 h-full w-[280px] z-50 bg-surface border-r border-outline-variant shadow-sm hidden lg:flex flex-col p-6 safe-area-pad">
         {sidebarContent}
       </aside>
 
-      {/* Mobile */}
-      <button onClick={() => setMobileOpen(true)} className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-full bg-surface shadow-soft border border-outline-variant text-primary" aria-label="Open menu">
-        <Menu size={24} />
-      </button>
+      {/* Mobile Drawer */}
       {mobileOpen && (
         <>
           <div className="fixed inset-0 bg-black/50 z-[60] lg:hidden backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <aside className="fixed left-0 top-0 h-full w-[280px] z-[70] bg-surface shadow-xl flex flex-col p-6 animate-slide-in-left lg:hidden">
-            <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 p-1 rounded-full hover:bg-surface-container-high text-on-surface-variant" aria-label="Close menu">
+          <aside className="fixed left-0 top-0 h-dvh w-[280px] z-[70] bg-surface shadow-xl flex flex-col p-6 animate-slide-in-left lg:hidden safe-area-pad">
+            <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-surface-container-high text-on-surface-variant min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Close menu">
               <X size={20} />
             </button>
             {sidebarContent}
@@ -106,26 +107,39 @@ export default function OwnerPanelShell({ ownerName, children }: { ownerName: st
       )}
 
       {/* Main */}
-      <div className="flex-1 lg:ml-[280px] flex flex-col min-h-screen">
-        <header className="sticky top-0 z-40 bg-surface/80 backdrop-blur-md shadow-sm border-b border-outline-variant flex items-center justify-between px-6 lg:px-10 py-3">
-          <div className="relative w-full max-w-md">
-            <input type="text" placeholder="Cari transaksi, produk, atau pelanggan..."
-              className="block w-full pl-4 pr-4 py-2 border border-outline-variant rounded-full bg-surface-container-lowest text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder-on-surface-variant/70" />
-          </div>
-          <div className="flex items-center gap-3 ml-4">
-            <Link href="/panel/x7k9m2-daya-owner/notifikasi" className="p-2 rounded-full hover:bg-primary/5 text-on-surface-variant relative">
-              <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full" />
-            </Link>
-            <div className="h-8 w-px bg-outline-variant" />
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold">
-                {ownerName.charAt(0).toUpperCase()}
+      <div className="flex-1 lg:ml-[280px] flex flex-col min-h-dvh">
+        {/* Top Bar — hamburger → search → avatar, all inline flex */}
+        <header className="sticky top-0 z-40 bg-surface/80 backdrop-blur-md shadow-sm border-b border-outline-variant">
+          <div className="flex items-center gap-3 px-4 lg:px-10 py-3">
+            {/* Hamburger — only mobile, 44px fixed, NOT absolute */}
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="lg:hidden w-11 h-11 shrink-0 rounded-full bg-surface-container-lowest border border-outline-variant/50 shadow-sm flex items-center justify-center text-primary hover:bg-primary/5 transition-colors"
+              aria-label="Open menu"
+            >
+              <Menu size={22} />
+            </button>
+
+            {/* Search — flex-1, min-w-0 so it never gets overlapped */}
+            <div className="flex-1 min-w-0 relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
+              <input type="text" placeholder="Cari transaksi, produk, atau pelanggan..."
+                className="block w-full pl-10 pr-4 py-2.5 border border-outline-variant rounded-full bg-surface-container-lowest text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all placeholder-on-surface-variant/70" />
+            </div>
+
+            {/* Avatar & Name */}
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="h-8 w-px bg-outline-variant hidden sm:block" />
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold">
+                  {ownerName.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm font-semibold text-on-surface hidden lg:block">{ownerName}</span>
               </div>
-              <span className="text-sm font-semibold text-on-surface hidden lg:block">{ownerName}</span>
             </div>
           </div>
         </header>
+
         <main className="flex-1 p-4 md:p-6 lg:p-10 max-w-[1280px] mx-auto w-full">
           {children}
         </main>

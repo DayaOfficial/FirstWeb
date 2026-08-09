@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -23,6 +23,10 @@ const navItems = [
   { icon: Wallet, label: 'E-Wallet', href: '/ewallet' },
   { icon: HelpCircle, label: 'Bantuan', href: '/bantuan' },
 ];
+
+// Context to share sidebar open state with TopBar
+const SidebarContext = createContext<{ open: () => void }>({ open: () => {} });
+export function useSidebarToggle() { return useContext(SidebarContext); }
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -124,20 +128,11 @@ export default function Sidebar() {
   );
 
   return (
-    <>
+    <SidebarContext.Provider value={{ open: () => setMobileOpen(true) }}>
       {/* Desktop Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-[280px] z-50 bg-surface border-r border-outline-variant shadow-sm hidden lg:flex flex-col p-6">
+      <aside className="fixed left-0 top-0 h-full w-[280px] z-50 bg-surface border-r border-outline-variant shadow-sm hidden lg:flex flex-col p-6 safe-area-pad">
         {sidebarContent}
       </aside>
-
-      {/* Mobile Hamburger */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-full bg-surface shadow-soft border border-outline-variant text-primary"
-        aria-label="Open menu"
-      >
-        <Menu size={24} />
-      </button>
 
       {/* Mobile Drawer */}
       {mobileOpen && (
@@ -146,10 +141,10 @@ export default function Sidebar() {
             className="fixed inset-0 bg-black/50 z-[60] lg:hidden backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="fixed left-0 top-0 h-full w-[280px] z-[70] bg-surface shadow-xl flex flex-col p-6 animate-slide-in-left lg:hidden">
+          <aside className="fixed left-0 top-0 h-dvh w-[280px] z-[70] bg-surface shadow-xl flex flex-col p-6 animate-slide-in-left lg:hidden safe-area-pad">
             <button
               onClick={() => setMobileOpen(false)}
-              className="absolute top-4 right-4 p-1 rounded-full hover:bg-surface-container-high text-on-surface-variant"
+              className="absolute top-4 right-4 p-2 rounded-full hover:bg-surface-container-high text-on-surface-variant min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Close menu"
             >
               <X size={20} />
@@ -158,6 +153,6 @@ export default function Sidebar() {
           </aside>
         </>
       )}
-    </>
+    </SidebarContext.Provider>
   );
 }

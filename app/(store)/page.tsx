@@ -12,6 +12,7 @@ import {
 interface BannerSlide {
   type: 'image';
   image_url: string;
+  image_mobile_url?: string;
   title: string;
   link?: string;
 }
@@ -27,11 +28,12 @@ function HeroCarousel() {
     // Load banners from database API
     fetch('/api/banners')
       .then(res => res.json())
-      .then((data: { image_url: string; title: string; link?: string }[]) => {
+      .then((data: { image_url: string; image_mobile_url?: string; title: string; link?: string }[]) => {
         if (data && data.length > 0) {
           const bannerSlides: BannerSlide[] = data.map(b => ({
             type: 'image' as const,
             image_url: b.image_url,
+            image_mobile_url: b.image_mobile_url || undefined,
             title: b.title,
             link: b.link,
           }));
@@ -52,7 +54,7 @@ function HeroCarousel() {
   // If no banners, don't render the carousel
   if (slides.length === 0) {
     return (
-      <section className="relative rounded-2xl overflow-hidden shadow-soft h-[280px] sm:h-[340px] lg:h-[400px]">
+      <section className="relative rounded-2xl overflow-hidden shadow-soft aspect-[4/3] sm:aspect-[21/9]">
         <div className="w-full h-full flex items-center justify-center gradient-primary text-white relative">
           <div className="absolute inset-0 pattern-circuit" />
           <div className="absolute -right-20 -top-20 w-80 h-80 bg-pink-500/20 rounded-full blur-3xl" />
@@ -71,14 +73,26 @@ function HeroCarousel() {
   const currentSlide = slides[current];
 
   return (
-    <section className="relative rounded-2xl overflow-hidden shadow-soft h-[280px] sm:h-[340px] lg:h-[400px]">
+    <section className="relative rounded-2xl overflow-hidden shadow-soft aspect-[4/3] sm:aspect-[21/9]">
       {currentSlide.type === 'image' && (
         <div className="relative w-full h-full">
-          <img
-            src={currentSlide.image_url}
-            alt={currentSlide.title}
-            className="w-full h-full object-cover transition-opacity duration-500"
-          />
+          {/* Mobile image (< md) if available, otherwise desktop with center crop */}
+          {currentSlide.image_mobile_url ? (
+            <picture>
+              <source media="(min-width: 768px)" srcSet={currentSlide.image_url} />
+              <img
+                src={currentSlide.image_mobile_url}
+                alt={currentSlide.title}
+                className="w-full h-full object-cover object-center transition-opacity duration-500"
+              />
+            </picture>
+          ) : (
+            <img
+              src={currentSlide.image_url}
+              alt={currentSlide.title}
+              className="w-full h-full object-cover object-center transition-opacity duration-500"
+            />
+          )}
           <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/30 to-transparent" />
         </div>
       )}

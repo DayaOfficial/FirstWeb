@@ -1,7 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { TrendingUp, TrendingDown, ShoppingCart, Users, Banknote, DollarSign, Package, BarChart3, Gamepad2, Smartphone, Crown, Eye, MoreVertical } from 'lucide-react';
+import { TrendingUp, TrendingDown, ShoppingCart, Users, Banknote, DollarSign, Package, BarChart3, Gamepad2, Smartphone, Crown, Eye, MoreVertical, AlertTriangle, Wallet } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 
 const stats = [
@@ -34,26 +35,77 @@ const recentOrders = [
   { id: '#DM-8918', customer: 'Citra Ayu', initials: 'CA', product: 'Token PLN 50.000', cat: 'Token & Tagihan', total: 51000, status: 'Dibatalkan', statusColor: 'bg-error/10 text-error border-error/20' },
 ];
 
+interface BalanceWarning {
+  provider: string;
+  balance: number;
+  currency: string;
+}
+
 export default function OwnerDashboard() {
+  const [warnings, setWarnings] = useState<BalanceWarning[]>([]);
+
+  // Fetch balance warnings for dashboard banner
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/owner/balance');
+        if (res.ok) {
+          const { balances } = await res.json();
+          const lowBalances = (balances || []).filter((b: { balance: number; provider: string }) => {
+            if (b.provider === 'digiflazz') return b.balance < 100000;
+            if (b.provider === 'jokerpanel') return b.balance < 50;
+            return false;
+          });
+          setWarnings(lowBalances);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
+      {/* Warning Banners — saldo menipis */}
+      {warnings.length > 0 && (
+        <div className="space-y-2">
+          {warnings.map((w) => (
+            <div key={w.provider} className="flex items-center gap-3 p-4 rounded-xl bg-error/10 border border-error/20 animate-fade-in">
+              <AlertTriangle size={20} className="text-error shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-error">
+                  Saldo {w.provider === 'digiflazz' ? 'Digiflazz' : 'JokerPanel'} menipis!
+                </p>
+                <p className="text-xs text-error/80">
+                  Sisa: {w.currency === 'IDR' ? formatRupiah(w.balance) : `$${w.balance}`} — segera lakukan deposit.
+                </p>
+              </div>
+              <Link href="/panel/x7k9m2-daya-owner/saldo"
+                className="shrink-0 px-3 py-1.5 rounded-full bg-error text-white text-xs font-semibold hover:bg-error/90 transition-colors">
+                <Wallet size={12} className="inline mr-1" /> Cek Saldo
+              </Link>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl lg:text-3xl font-bold text-on-surface tracking-tight font-[family-name:var(--font-heading)]">Dashboard</h2>
           <p className="text-sm text-on-surface-variant mt-1">Ringkasan performa bisnis dan pesanan terbaru Anda.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="px-5 py-2.5 rounded-full border border-pink-500 text-pink-500 font-semibold text-sm hover:bg-pink-500/5 transition-colors flex items-center gap-2 bg-surface-container-lowest">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <Link href="/panel/x7k9m2-daya-owner/produk"
+            className="px-5 py-2.5 rounded-full border border-pink-500 text-pink-500 font-semibold text-sm hover:bg-pink-500/5 transition-colors flex items-center justify-center gap-2 bg-surface-container-lowest">
             <Package size={16} /> Kelola Produk
-          </button>
-          <button className="px-5 py-2.5 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center gap-2">
-            <BarChart3 size={16} /> Lihat Laporan
-          </button>
+          </Link>
+          <Link href="/panel/x7k9m2-daya-owner/pesanan"
+            className="px-5 py-2.5 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2">
+            <BarChart3 size={16} /> Lihat Transaksi
+          </Link>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats — 1 col phone, 2 col tablet, 4 col desktop */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((s, i) => (
           <div key={i} className="bg-surface-container-lowest rounded-xl p-5 shadow-soft hover:shadow-[0px_8px_30px_rgba(192,0,58,0.12)] transition-shadow relative overflow-hidden group">
@@ -75,9 +127,9 @@ export default function OwnerDashboard() {
 
       {/* Chart + Category */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sales Chart */}
-        <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl shadow-soft p-6 flex flex-col h-[400px]">
-          <div className="flex justify-between items-center mb-6">
+        {/* Sales Chart — 7 bars always visible, fluid widths */}
+        <div className="lg:col-span-2 bg-surface-container-lowest rounded-xl shadow-soft p-4 sm:p-6 flex flex-col" style={{ minHeight: '320px' }}>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
             <h3 className="text-lg font-bold text-on-surface font-[family-name:var(--font-heading)]">Tren Penjualan (7 Hari)</h3>
             <select className="bg-surface border border-outline-variant text-sm rounded-lg p-2 text-on-surface-variant focus:ring-primary focus:border-primary">
               <option>7 Hari Terakhir</option>
@@ -85,23 +137,33 @@ export default function OwnerDashboard() {
               <option>Tahun Ini</option>
             </select>
           </div>
-          <div className="flex-1 flex items-end justify-between gap-2 sm:gap-4 mt-auto border-b border-outline-variant pb-2 relative">
+          {/* Chart area — bars use percentage width so all 7 always fit */}
+          <div className="flex-1 flex items-end gap-[4%] mt-auto border-b border-outline-variant pb-2 relative" style={{ minHeight: '200px' }}>
             {chartData.map((d, i) => (
-              <div key={i} className="w-full relative group" style={{ height: `${d.value}%` }}>
-                <div className={`w-full h-full rounded-t-sm transition-all duration-500 ${i === chartData.length - 1 ? 'bg-primary shadow-[0_0_15px_rgba(192,0,58,0.3)]' : `bg-primary-container/${Math.min(20 + d.value * 0.6, 80)}`}`} />
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-inverse-surface text-inverse-on-surface text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                  {d.value * 0.2}M
+              <div key={i} className="flex-1 relative group flex flex-col items-center justify-end" style={{ height: '100%' }}>
+                <div
+                  className={`w-full rounded-t-md transition-all duration-500 ${i === chartData.length - 1 ? 'bg-primary shadow-[0_0_15px_rgba(192,0,58,0.3)]' : 'bg-primary-container/40'}`}
+                  style={{ height: `${d.value}%`, minWidth: '8px', maxWidth: '48px' }}
+                />
+                {/* Tooltip on hover */}
+                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-inverse-surface text-inverse-on-surface text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                  {(d.value * 0.2).toFixed(0)}M
                 </div>
               </div>
             ))}
           </div>
-          <div className="flex justify-between mt-2 text-xs text-on-surface-variant font-semibold">
-            {chartData.map((d, i) => <span key={i}>{d.day}</span>)}
+          {/* Day labels — always 7 visible */}
+          <div className="flex gap-[4%] mt-2">
+            {chartData.map((d, i) => (
+              <div key={i} className="flex-1 text-center text-xs text-on-surface-variant font-semibold truncate">
+                {d.day}
+              </div>
+            ))}
           </div>
         </div>
 
         {/* Category Highlights */}
-        <div className="bg-gradient-to-br from-surface-container-highest to-surface-container rounded-xl shadow-soft p-6 flex flex-col h-[400px]">
+        <div className="bg-gradient-to-br from-surface-container-highest to-surface-container rounded-xl shadow-soft p-5 sm:p-6 flex flex-col" style={{ minHeight: '320px' }}>
           <h3 className="text-lg font-bold text-on-surface mb-6 font-[family-name:var(--font-heading)]">Sorotan Kategori</h3>
           <div className="flex-1 space-y-5 overflow-y-auto pr-1">
             {categories.map((cat, i) => (
@@ -127,14 +189,34 @@ export default function OwnerDashboard() {
         </div>
       </section>
 
-      {/* Recent Orders */}
+      {/* Recent Orders — scrollable on mobile */}
       <section className="bg-surface-container-lowest rounded-xl shadow-soft overflow-hidden">
         <div className="p-5 border-b border-outline-variant flex justify-between items-center">
           <h3 className="text-lg font-bold text-on-surface font-[family-name:var(--font-heading)]">Pesanan Terbaru</h3>
-          <button className="p-2 rounded-full hover:bg-surface-container-high text-on-surface-variant"><MoreVertical size={18} /></button>
+          <button className="p-2 rounded-full hover:bg-surface-container-high text-on-surface-variant min-w-[44px] min-h-[44px] flex items-center justify-center"><MoreVertical size={18} /></button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
+
+        {/* Mobile card view */}
+        <div className="block sm:hidden divide-y divide-outline-variant/50">
+          {recentOrders.map((order, i) => (
+            <div key={i} className="p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-on-surface-variant font-mono">{order.id}</span>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${order.statusColor}`}>{order.status}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full gradient-primary text-white flex items-center justify-center text-[10px] font-bold shrink-0">{order.initials}</div>
+                <span className="text-sm font-semibold text-on-surface truncate">{order.customer}</span>
+              </div>
+              <p className="text-sm text-on-surface">{order.product}</p>
+              <p className="text-sm font-bold text-primary">{formatRupiah(order.total)}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table view */}
+        <div className="overflow-x-auto hidden sm:block">
+          <table className="w-full text-left border-collapse min-w-[700px]">
             <thead>
               <tr className="bg-surface-container/50 border-b border-outline-variant">
                 <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Order ID</th>
@@ -172,7 +254,7 @@ export default function OwnerDashboard() {
           </table>
         </div>
         <div className="p-4 border-t border-outline-variant bg-surface-container-lowest flex justify-center">
-          <a href="#" className="text-primary font-semibold text-sm hover:underline">Lihat Semua Pesanan</a>
+          <Link href="/panel/x7k9m2-daya-owner/pesanan" className="text-primary font-semibold text-sm hover:underline">Lihat Semua Pesanan</Link>
         </div>
       </section>
     </div>

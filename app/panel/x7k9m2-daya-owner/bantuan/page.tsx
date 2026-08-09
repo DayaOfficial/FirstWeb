@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { HelpCircle, Plus, Edit3, Trash2, X, Upload, ArrowUp, ArrowDown, MessageCircle, Globe } from 'lucide-react';
+import { HelpCircle, Plus, Edit3, Trash2, X, Upload, ArrowUp, ArrowDown, MessageCircle, Globe, Loader2 } from 'lucide-react';
 import BrandImage from '@/components/ui/BrandImage';
+import { createClient } from '@/lib/supabase/client';
 import type { FAQItem, SocialContact } from '@/types';
 
 const FAQ_CATEGORIES = ['Umum', 'Pembayaran', 'Topup', 'SMM', 'Nokos', 'App Premium'];
@@ -35,20 +36,43 @@ export default function OwnerBantuanPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'faq' | 'contact'; id: string } | null>(null);
 
   useEffect(() => {
-    const f = localStorage.getItem('daya_faqs');
-    const c = localStorage.getItem('daya_social_contacts');
-    if (f) setFaqs(JSON.parse(f));
-    if (c) setContacts(JSON.parse(c));
+    const loadData = async () => {
+      const supabase = createClient();
+      const { data: faqData } = await supabase.from('faqs').select('*').order('sort_order');
+      const { data: contactData } = await supabase.from('social_links').select('*').order('sort_order');
+      if (faqData) setFaqs(faqData.map((f: Record<string, unknown>) => ({
+        id: f.id as string, question: f.question as string, answer: f.answer as string,
+        category: (f.category as string) || 'Umum', sortOrder: (f.sort_order as number) || 0, isActive: f.is_active as boolean
+      })));
+      if (contactData) setContacts(contactData.map((c: Record<string, unknown>) => ({
+        id: c.id as string, platform: c.platform as string, logoUrl: (c.logo_url as string) || '',
+        username: c.username as string, link: c.link as string, actionLabel: (c.action_label as string) || 'Chat',
+        sortOrder: (c.sort_order as number) || 0, isActive: c.is_active as boolean
+      })));
+    };
+    loadData();
   }, []);
 
-  const saveFaqs = (data: FAQItem[]) => {
+  const saveFaqs = async (data: FAQItem[]) => {
     setFaqs(data);
-    localStorage.setItem('daya_faqs', JSON.stringify(data));
+    const supabase = createClient();
+    for (const f of data) {
+      await supabase.from('faqs').upsert({
+        id: f.id, question: f.question, answer: f.answer, category: f.category,
+        sort_order: f.sortOrder, is_active: f.isActive
+      });
+    }
   };
 
-  const saveContacts = (data: SocialContact[]) => {
+  const saveContacts = async (data: SocialContact[]) => {
     setContacts(data);
-    localStorage.setItem('daya_social_contacts', JSON.stringify(data));
+    const supabase = createClient();
+    for (const c of data) {
+      await supabase.from('social_links').upsert({
+        id: c.id, platform: c.platform, logo_url: c.logoUrl, username: c.username,
+        link: c.link, action_label: c.actionLabel, sort_order: c.sortOrder, is_active: c.isActive
+      });
+    }
   };
 
   /* ── FAQ CRUD ── */
