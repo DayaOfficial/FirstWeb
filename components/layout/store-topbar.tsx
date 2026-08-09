@@ -9,10 +9,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
-import TopBar from '@/components/layout/TopBar';
-import Footer from '@/components/layout/Footer';
 
-const STORE_NAV = [
+export const STORE_NAV = [
   { href: '/', label: 'Beranda', icon: Home },
   { href: '/topup-game', label: 'Top Up Game', icon: Gamepad2 },
   { href: '/app-premium', label: 'App Premium', icon: Crown },
@@ -25,12 +23,12 @@ const STORE_NAV = [
   { href: '/bantuan', label: 'Bantuan', icon: HelpCircle },
 ];
 
-export default function StoreLayout({ children }: { children: React.ReactNode }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+export default function StoreTopBar({ children }: { children?: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
   return (
-    <div className="flex min-h-screen">
+    <>
       {/* ── DESKTOP SIDEBAR (lg+) ── */}
       <aside className="fixed left-0 top-0 h-full w-[280px] z-50 bg-surface border-r border-outline-variant shadow-sm hidden lg:flex flex-col p-6">
         <div className="mb-8">
@@ -64,16 +62,16 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* ── MOBILE DRAWER (< lg) ── */}
-      {drawerOpen && (
+      {open && (
         <div className="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
           <aside className="absolute left-0 top-0 h-full w-72 max-w-[85vw] bg-surface shadow-2xl flex flex-col overflow-y-auto animate-slide-in-left">
             <div className="flex items-center justify-between p-4 border-b border-outline-variant">
-              <Link href="/" onClick={() => setDrawerOpen(false)} className="flex items-center gap-2">
+              <Link href="/" onClick={() => setOpen(false)} className="flex items-center gap-2">
                 <Logo size={28} />
                 <span className="font-extrabold text-primary font-[family-name:var(--font-heading)]">DAYA MART</span>
               </Link>
-              <button onClick={() => setDrawerOpen(false)} aria-label="Tutup menu"
+              <button onClick={() => setOpen(false)} aria-label="Tutup menu"
                 className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors">
                 <X size={20} className="text-on-surface-variant" />
               </button>
@@ -83,7 +81,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
                 const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
                 return (
                   <Link key={item.href} href={item.href}
-                    onClick={() => setDrawerOpen(false)}
+                    onClick={() => setOpen(false)}
                     className={cn(
                       'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all',
                       isActive
@@ -100,30 +98,18 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
-      {/* ── MAIN CONTENT ── */}
-      <div className="flex-1 lg:ml-[280px] flex flex-col min-h-screen">
-        {/* TopBar with hamburger button injected */}
-        <header className="sticky top-0 z-40 bg-surface/80 backdrop-blur-md shadow-sm border-b border-outline-variant">
-          <div className="flex items-center gap-3 px-4 lg:px-10 py-3">
-            {/* HAMBURGER — self-contained onClick, PASTI terhubung ke drawer */}
-            <button
-              onClick={() => setDrawerOpen(true)}
-              aria-label="Buka menu navigasi"
-              className="lg:hidden w-11 h-11 shrink-0 rounded-full bg-surface-container-lowest border border-outline-variant/50 shadow-sm flex items-center justify-center text-primary hover:bg-primary/5 transition-colors active:scale-95"
-            >
-              <Menu size={22} />
-            </button>
+      {/* ── HAMBURGER BUTTON inject into TopBar ── */}
+      {/* We expose the open function via a hidden button that TopBar can trigger */}
+      <button
+        id="store-hamburger-trigger"
+        onClick={() => setOpen(true)}
+        aria-label="Buka menu navigasi"
+        className="lg:hidden w-11 h-11 shrink-0 rounded-full bg-surface-container-lowest border border-outline-variant/50 shadow-sm flex items-center justify-center text-primary hover:bg-primary/5 transition-colors active:scale-95"
+      >
+        <Menu size={22} />
+      </button>
 
-            {/* TopBar content (search, bell, avatar) rendered as child */}
-            <TopBar />
-          </div>
-        </header>
-
-        <main className="flex-1 p-4 md:p-6 lg:p-10 max-w-[1280px] mx-auto w-full">
-          {children}
-        </main>
-        <Footer />
-      </div>
-    </div>
+      {children}
+    </>
   );
 }
