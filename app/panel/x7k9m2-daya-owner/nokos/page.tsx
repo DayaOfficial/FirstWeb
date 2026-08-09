@@ -61,20 +61,22 @@ export default function NokosOwnerPage() {
   }
 
   async function loadAll() {
-    const { data: appsData } = await supabase
+    const { data: appsData, error: appsErr } = await supabase
       .from('nokos_apps')
       .select('*')
-      .order('sort_order', { ascending: true });
+      .order('created_at', { ascending: true });
+    if (appsErr) console.error('Load nokos_apps error:', appsErr);
     const appsList = (appsData as NokosAppRow[]) || [];
     setApps(appsList);
 
     const map: Record<string, NokosCountryRow[]> = {};
     for (const app of appsList) {
-      const { data: cData } = await supabase
+      const { data: cData, error: cErr } = await supabase
         .from('nokos_countries')
         .select('*')
         .eq('app_id', app.id)
         .order('country_name');
+      if (cErr) console.error('Load countries error:', cErr);
       map[app.id] = (cData as NokosCountryRow[]) || [];
     }
     setCountries(map);
@@ -89,13 +91,13 @@ export default function NokosOwnerPage() {
     setSaving(true);
     let logo_url: string | null = null;
     if (appLogo) logo_url = await uploadFile(appLogo, 'nokos');
-    await supabase.from('nokos_apps').insert({
+    const { error: insertErr } = await supabase.from('nokos_apps').insert({
       name: appName.trim(),
       logo_url,
       description: appDesc.trim() || null,
       is_active: true,
-      sort_order: apps.length,
     });
+    if (insertErr) { console.error('Insert app error:', insertErr); alert('Gagal menambah: ' + insertErr.message); }
     setAppName(''); setAppDesc(''); setAppLogo(null); setAppLogoPreview('');
     setShowAppForm(false);
     setSaving(false);

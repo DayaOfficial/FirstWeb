@@ -7,6 +7,24 @@ import BrandImage from '@/components/ui/BrandImage';
 import { createClient } from '@/lib/supabase/client';
 import type { FAQItem, SocialContact } from '@/types';
 
+const DEFAULT_FAQS: FAQItem[] = [
+  { id: '1', question: 'Bagaimana cara top up game?', answer: 'Pilih game yang ingin di top up, masukkan ID game Anda, pilih nominal yang diinginkan, konfirmasi pesanan, dan bayar melalui QRIS. Item akan masuk ke akun game Anda dalam 1–5 menit.', category: 'Transaksi', sortOrder: 1, isActive: true },
+  { id: '2', question: 'Berapa lama proses SMM panel?', answer: 'Proses bervariasi tergantung layanan yang dipilih. Beberapa layanan selesai dalam hitungan menit, sementara yang lain bisa memakan waktu beberapa jam. Status bisa dipantau di halaman riwayat transaksi.', category: 'SMM', sortOrder: 2, isActive: true },
+  { id: '3', question: 'Bagaimana jika transaksi gagal?', answer: 'Jika transaksi gagal, saldo Anda tidak akan terpotong atau dana akan dikembalikan secara otomatis. Hubungi customer service kami melalui WhatsApp dengan menyertakan kode pesanan.', category: 'Transaksi', sortOrder: 3, isActive: true },
+  { id: '4', question: 'Metode pembayaran apa yang tersedia?', answer: 'Saat ini kami menerima pembayaran melalui QRIS yang bisa dibayar menggunakan semua e-wallet (GoPay, OVO, DANA, ShopeePay, LinkAja) dan mobile banking.', category: 'Pembayaran', sortOrder: 4, isActive: true },
+  { id: '5', question: 'Bagaimana cara membeli nomor kosong (Nokos)?', answer: 'Pilih aplikasi yang Anda butuhkan (WhatsApp, Telegram, dll), pilih negara, konfirmasi pesanan, bayar melalui QRIS, lalu kirim format pesanan yang diberikan ke WhatsApp owner.', category: 'Nokos', sortOrder: 5, isActive: true },
+  { id: '6', question: 'Apakah bisa membeli app premium?', answer: 'Ya! Kami menyediakan berbagai aplikasi premium seperti Netflix, Spotify, YouTube Premium, Canva Pro, dan lainnya dengan harga terjangkau. Pilih paket yang diinginkan dan bayar melalui QRIS.', category: 'App Premium', sortOrder: 6, isActive: true },
+  { id: '7', question: 'Bagaimana cara isi pulsa & paket data?', answer: 'Pilih operator (Telkomsel, Indosat, XL, dll), masukkan nomor HP, pilih nominal pulsa atau paket data, konfirmasi pesanan, dan bayar. Pulsa/paket data akan masuk dalam 1–3 menit.', category: 'Pulsa & Data', sortOrder: 7, isActive: true },
+  { id: '8', question: 'Apakah ada garansi untuk setiap pembelian?', answer: 'Ya, setiap transaksi memiliki garansi. Jika item tidak masuk atau terjadi kesalahan, hubungi CS kami dalam waktu 1x24 jam dengan menyertakan bukti transaksi.', category: 'Umum', sortOrder: 8, isActive: true },
+  { id: '9', question: 'Jam operasional customer service?', answer: 'Customer service kami tersedia 24 jam melalui WhatsApp. Untuk respon tercepat, hubungi di jam kerja (08:00 - 22:00 WIB).', category: 'Umum', sortOrder: 9, isActive: true },
+];
+
+const DEFAULT_CONTACTS: SocialContact[] = [
+  { id: '1', platform: 'WhatsApp', logoUrl: '', username: 'CS Daya Mart', link: 'https://wa.me/6287800001232', actionLabel: 'Chat', sortOrder: 1, isActive: true },
+  { id: '2', platform: 'Instagram', logoUrl: '', username: '@dayamart.id', link: 'https://instagram.com/dayamart.id', actionLabel: 'Follow', sortOrder: 2, isActive: true },
+  { id: '3', platform: 'Telegram', logoUrl: '', username: '@dayamart', link: 'https://t.me/dayamart', actionLabel: 'Join', sortOrder: 3, isActive: true },
+];
+
 function getPlatformColor(platform: string) {
   const colors: Record<string, { bg: string; text: string; border: string }> = {
     'WhatsApp': { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' },
@@ -21,8 +39,8 @@ function getPlatformColor(platform: string) {
 }
 
 export default function BantuanPage() {
-  const [faqs, setFaqs] = useState<FAQItem[]>([]);
-  const [contacts, setContacts] = useState<SocialContact[]>([]);
+  const [faqs, setFaqs] = useState<FAQItem[]>(DEFAULT_FAQS);
+  const [contacts, setContacts] = useState<SocialContact[]>(DEFAULT_CONTACTS);
   const [openIdx, setOpenIdx] = useState<number | null>(0);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -32,20 +50,22 @@ export default function BantuanPage() {
       const { data: faqData } = await supabase.from('faqs').select('*').eq('is_active', true).order('sort_order');
       const { data: contactData } = await supabase.from('social_links').select('*').eq('is_active', true).order('sort_order');
 
-      if (faqData) {
+      if (faqData && faqData.length > 0) {
         setFaqs(faqData.map((f: Record<string, unknown>) => ({
           id: f.id as string, question: f.question as string, answer: f.answer as string,
           category: (f.category as string) || 'Umum', sortOrder: (f.sort_order as number) || 0, isActive: true
         })));
       }
+      // jika faqData kosong, tetap pakai DEFAULT_FAQS
 
-      if (contactData) {
+      if (contactData && contactData.length > 0) {
         setContacts(contactData.map((c: Record<string, unknown>) => ({
           id: c.id as string, platform: c.platform as string, logoUrl: (c.logo_url as string) || '',
           username: c.username as string, link: c.link as string, actionLabel: (c.action_label as string) || 'Chat',
           sortOrder: (c.sort_order as number) || 0, isActive: true
         })));
       }
+      // jika contactData kosong, tetap pakai DEFAULT_CONTACTS
     };
     loadData();
   }, []);
