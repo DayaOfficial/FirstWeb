@@ -54,8 +54,8 @@ function HeroCarousel() {
   // If no banners, don't render the carousel
   if (slides.length === 0) {
     return (
-      <section className="relative rounded-2xl overflow-hidden shadow-soft aspect-[4/3] sm:aspect-[21/9]">
-        <div className="w-full h-full flex items-center justify-center gradient-primary text-white relative">
+      <section className="relative rounded-2xl overflow-hidden shadow-soft">
+        <div className="w-full aspect-[4/3] sm:aspect-[21/9] flex items-center justify-center gradient-primary text-white relative">
           <div className="absolute inset-0 pattern-circuit" />
           <div className="absolute -right-20 -top-20 w-80 h-80 bg-pink-500/20 rounded-full blur-3xl" />
           <div className="absolute -left-10 -bottom-10 w-60 h-60 bg-secondary/10 rounded-full blur-3xl" />
@@ -73,24 +73,25 @@ function HeroCarousel() {
   const currentSlide = slides[current];
 
   return (
-    <section className="relative rounded-2xl overflow-hidden shadow-soft aspect-[4/3] sm:aspect-[21/9]">
+    <section className="relative rounded-2xl overflow-hidden shadow-soft">
       {currentSlide.type === 'image' && (
-        <div className="relative w-full h-full">
-          {/* Mobile image (< md) if available, otherwise desktop with center crop */}
+        <div className="relative w-full">
+          {/* Mobile: full display (no crop). Desktop: 21:9 hero */}
           {currentSlide.image_mobile_url ? (
             <picture>
               <source media="(min-width: 768px)" srcSet={currentSlide.image_url} />
+              {/* Mobile: h-auto = full image visible, never cropped */}
               <img
                 src={currentSlide.image_mobile_url}
                 alt={currentSlide.title}
-                className="w-full h-full object-cover object-center transition-opacity duration-500"
+                className="w-full h-auto sm:aspect-[21/9] sm:object-cover sm:object-center transition-opacity duration-500"
               />
             </picture>
           ) : (
             <img
               src={currentSlide.image_url}
               alt={currentSlide.title}
-              className="w-full h-full object-cover object-center transition-opacity duration-500"
+              className="w-full h-auto sm:aspect-[21/9] sm:object-cover sm:object-center transition-opacity duration-500"
             />
           )}
           <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/30 to-transparent" />

@@ -25,12 +25,36 @@ const navItems = [
 ];
 
 // Context to share sidebar open state with TopBar
-const SidebarContext = createContext<{ open: () => void }>({ open: () => {} });
+interface SidebarContextValue { open: () => void }
+const SidebarContext = createContext<SidebarContextValue>({ open: () => {} });
 export function useSidebarToggle() { return useContext(SidebarContext); }
 
-export default function Sidebar() {
-  const pathname = usePathname();
+// Provider — wraps both Sidebar and TopBar in layout
+export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // ESC to close
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileOpen(false); };
+    if (mobileOpen) {
+      document.addEventListener('keydown', handler);
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.removeEventListener('keydown', handler); document.body.style.overflow = ''; };
+  }, [mobileOpen]);
+
+  return (
+    <SidebarContext.Provider value={{ open: () => setMobileOpen(true) }}>
+      <SidebarInner mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+      {children}
+    </SidebarContext.Provider>
+  );
+}
+
+function SidebarInner({ mobileOpen, setMobileOpen }: { mobileOpen: boolean; setMobileOpen: (v: boolean) => void }) {
+  const pathname = usePathname();
   const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
@@ -128,7 +152,7 @@ export default function Sidebar() {
   );
 
   return (
-    <SidebarContext.Provider value={{ open: () => setMobileOpen(true) }}>
+    <>
       {/* Desktop Sidebar */}
       <aside className="fixed left-0 top-0 h-full w-[280px] z-50 bg-surface border-r border-outline-variant shadow-sm hidden lg:flex flex-col p-6 safe-area-pad">
         {sidebarContent}
@@ -153,6 +177,10 @@ export default function Sidebar() {
           </aside>
         </>
       )}
-    </SidebarContext.Provider>
+    </>
   );
+}
+
+export default function Sidebar() {
+  return null; // Rendering handled by SidebarProvider
 }

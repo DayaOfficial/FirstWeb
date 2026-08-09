@@ -1,23 +1,27 @@
 'use client';
 
-import { ShoppingCart, Search, Eye, Clock, CheckCircle2, XCircle, Filter } from 'lucide-react';
-import { formatRupiah } from '@/lib/utils';
-import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { ShoppingCart, Search, Eye, Inbox, Loader2 } from 'lucide-react';
+import { formatRupiah, cn } from '@/lib/utils';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
 
-const sampleOrders = [
-  { id: '#DM-8921', customer: 'Andi Nugroho', product: 'ML 344 Diamonds', category: 'Top Up Game', amount: 85000, paymentStatus: 'completed', processStatus: 'success', date: '26 Jul 2026, 14:30' },
-  { id: '#DM-8920', customer: 'Siti Rahma', product: 'Netflix Premium 1 Bulan', category: 'App Premium', amount: 120000, paymentStatus: 'completed', processStatus: 'success', date: '26 Jul 2026, 13:15' },
-  { id: '#DM-8919', customer: 'Budi Wibowo', product: 'Pulsa Telkomsel 100rb', category: 'Pulsa', amount: 98500, paymentStatus: 'completed', processStatus: 'processing', date: '26 Jul 2026, 12:00' },
-  { id: '#DM-8918', customer: 'Citra Ayu', product: 'Token PLN 50.000', category: 'Token', amount: 51000, paymentStatus: 'expired', processStatus: 'canceled', date: '26 Jul 2026, 10:45' },
-  { id: '#DM-8917', customer: 'Dian Pratama', product: 'IG Followers 1K', category: 'SMM', amount: 15000, paymentStatus: 'completed', processStatus: 'success', date: '25 Jul 2026, 21:30' },
-  { id: '#DM-8916', customer: 'Eka Fitri', product: 'Spotify Premium 1 Bulan', category: 'App Premium', amount: 15000, paymentStatus: 'pending', processStatus: 'waiting', date: '25 Jul 2026, 20:00' },
-];
+interface OrderRow {
+  id: string;
+  order_code: string;
+  product_name: string;
+  module: string;
+  amount: number;
+  buyer_name: string | null;
+  payment_status: string;
+  process_status: string;
+  created_at: string;
+}
 
 const processColors: Record<string, string> = {
   success: 'bg-green-50 text-green-700 border-green-200',
   processing: 'bg-blue-50 text-blue-700 border-blue-200',
   waiting: 'bg-amber-50 text-amber-700 border-amber-200',
+  pending: 'bg-amber-50 text-amber-700 border-amber-200',
   canceled: 'bg-red-50 text-red-700 border-red-200',
   failed: 'bg-red-50 text-red-700 border-red-200',
 };
@@ -26,18 +30,46 @@ const processLabels: Record<string, string> = {
   success: 'Selesai',
   processing: 'Diproses',
   waiting: 'Menunggu',
+  pending: 'Pending',
   canceled: 'Dibatalkan',
   failed: 'Gagal',
 };
 
 export default function OwnerPesananPage() {
   const [search, setSearch] = useState('');
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = sampleOrders.filter(o =>
-    o.id.toLowerCase().includes(search.toLowerCase()) ||
-    o.customer.toLowerCase().includes(search.toLowerCase()) ||
-    o.product.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    const load = async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from('orders')
+        .select('id, order_code, product_name, module, amount, buyer_name, payment_status, process_status, created_at')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      setOrders((data as OrderRow[]) || []);
+      setLoading(false);
+    };
+    load();
+  }, []);
+
+  const filtered = orders.filter(o =>
+    (o.order_code || '').toLowerCase().includes(search.toLowerCase()) ||
+    (o.buyer_name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (o.product_name || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalOrders = orders.length;
+  const successCount = orders.filter(o => o.process_status === 'success').length;
+  const processingCount = orders.filter(o => ['processing', 'waiting', 'pending'].includes(o.process_status)).length;
+  const canceledCount = orders.filter(o => ['canceled', 'failed'].includes(o.process_status)).length;
+
+  const formatDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return iso; }
+  };
 
   return (
     <div className="space-y-8">
@@ -59,71 +91,76 @@ export default function OwnerPesananPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-surface-container-lowest rounded-xl p-4 shadow-soft border border-outline-variant/20 text-center">
-          <p className="text-2xl font-bold text-on-surface font-[family-name:var(--font-heading)]">156</p>
+          <p className="text-2xl font-bold text-on-surface font-[family-name:var(--font-heading)]">{loading ? '—' : totalOrders}</p>
           <p className="text-xs text-on-surface-variant mt-1">Total Pesanan</p>
         </div>
         <div className="bg-surface-container-lowest rounded-xl p-4 shadow-soft border border-outline-variant/20 text-center">
-          <p className="text-2xl font-bold text-green-600 font-[family-name:var(--font-heading)]">142</p>
+          <p className="text-2xl font-bold text-green-600 font-[family-name:var(--font-heading)]">{loading ? '—' : successCount}</p>
           <p className="text-xs text-on-surface-variant mt-1">Selesai</p>
         </div>
         <div className="bg-surface-container-lowest rounded-xl p-4 shadow-soft border border-outline-variant/20 text-center">
-          <p className="text-2xl font-bold text-blue-600 font-[family-name:var(--font-heading)]">8</p>
+          <p className="text-2xl font-bold text-blue-600 font-[family-name:var(--font-heading)]">{loading ? '—' : processingCount}</p>
           <p className="text-xs text-on-surface-variant mt-1">Diproses</p>
         </div>
         <div className="bg-surface-container-lowest rounded-xl p-4 shadow-soft border border-outline-variant/20 text-center">
-          <p className="text-2xl font-bold text-red-600 font-[family-name:var(--font-heading)]">6</p>
+          <p className="text-2xl font-bold text-red-600 font-[family-name:var(--font-heading)]">{loading ? '—' : canceledCount}</p>
           <p className="text-xs text-on-surface-variant mt-1">Dibatalkan</p>
         </div>
       </div>
 
       {/* Orders Table */}
       <div className="bg-surface-container-lowest rounded-xl shadow-soft overflow-hidden border border-outline-variant/20">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
-            <thead>
-              <tr className="bg-surface-container/50 border-b border-outline-variant">
-                <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Order ID</th>
-                <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Pelanggan</th>
-                <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Produk</th>
-                <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Total</th>
-                <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Status</th>
-                <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Tanggal</th>
-                <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider text-right">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/50">
-              {filtered.map(order => (
-                <tr key={order.id} className="hover:bg-surface-container-low transition-colors">
-                  <td className="py-3 px-5 text-sm font-mono font-semibold text-on-surface">{order.id}</td>
-                  <td className="py-3 px-5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full gradient-primary text-white flex items-center justify-center text-[10px] font-bold">
-                        {order.customer.split(' ').map(n => n[0]).join('')}
-                      </div>
-                      <span className="text-sm text-on-surface">{order.customer}</span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-5">
-                    <span className="text-sm text-on-surface block">{order.product}</span>
-                    <span className="text-[10px] text-on-surface-variant">{order.category}</span>
-                  </td>
-                  <td className="py-3 px-5 text-sm font-semibold text-on-surface">{formatRupiah(order.amount)}</td>
-                  <td className="py-3 px-5">
-                    <span className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border', processColors[order.processStatus] || '')}>
-                      {processLabels[order.processStatus] || order.processStatus}
-                    </span>
-                  </td>
-                  <td className="py-3 px-5 text-xs text-on-surface-variant">{order.date}</td>
-                  <td className="py-3 px-5 text-right">
-                    <button className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/5 transition-colors">
-                      <Eye size={16} />
-                    </button>
-                  </td>
+        {loading ? (
+          <div className="p-12 text-center"><Loader2 size={28} className="mx-auto animate-spin text-primary" /></div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center">
+            <Inbox size={48} className="mx-auto mb-4 text-on-surface-variant/20" />
+            <p className="text-sm font-semibold text-on-surface-variant">
+              {search ? 'Tidak ada pesanan yang cocok.' : 'Belum ada transaksi. Pesanan pembeli akan muncul di sini.'}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[800px]">
+              <thead>
+                <tr className="bg-surface-container/50 border-b border-outline-variant">
+                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Order ID</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Pelanggan</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Produk</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Total</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Status</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Tanggal</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/50">
+                {filtered.map(order => (
+                  <tr key={order.id} className="hover:bg-surface-container-low transition-colors">
+                    <td className="py-3 px-5 text-sm font-mono font-semibold text-on-surface">{order.order_code}</td>
+                    <td className="py-3 px-5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full gradient-primary text-white flex items-center justify-center text-[10px] font-bold">
+                          {(order.buyer_name || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-sm text-on-surface">{order.buyer_name || 'Guest'}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-5">
+                      <span className="text-sm text-on-surface block">{order.product_name}</span>
+                      <span className="text-[10px] text-on-surface-variant">{order.module}</span>
+                    </td>
+                    <td className="py-3 px-5 text-sm font-semibold text-on-surface">{formatRupiah(Number(order.amount))}</td>
+                    <td className="py-3 px-5">
+                      <span className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border', processColors[order.process_status] || '')}>
+                        {processLabels[order.process_status] || order.process_status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-5 text-xs text-on-surface-variant">{formatDate(order.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

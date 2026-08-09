@@ -7,20 +7,6 @@ import BrandImage from '@/components/ui/BrandImage';
 import { createClient } from '@/lib/supabase/client';
 import type { FAQItem, SocialContact } from '@/types';
 
-/* ─── Default seed data ─── */
-const DEFAULT_FAQS: FAQItem[] = [
-  { id: 'faq-1', question: 'Bagaimana cara melakukan pemesanan di DAYA MART?', answer: 'Pilih produk yang diinginkan → Isi data yang diperlukan (User ID, No. HP, dll) → Lakukan pembayaran via QRIS → Pesanan akan diproses otomatis dalam hitungan detik.', category: 'Umum', sortOrder: 0, isActive: true },
-  { id: 'faq-2', question: 'Metode pembayaran apa saja yang tersedia?', answer: 'Saat ini kami hanya menerima pembayaran melalui QRIS. Anda bisa scan QRIS menggunakan e-wallet (DANA, OVO, GoPay, ShopeePay) atau m-banking apapun.', category: 'Pembayaran', sortOrder: 1, isActive: true },
-  { id: 'faq-3', question: 'Berapa lama proses pengiriman pesanan?', answer: 'Untuk produk digital otomatis (Top Up Game, Pulsa, Token), proses hanya 1-30 detik setelah pembayaran terverifikasi. Untuk produk manual (Nokos, Robux Vilog, App Premium), proses 1-24 jam di jam operasional.', category: 'Umum', sortOrder: 2, isActive: true },
-  { id: 'faq-4', question: 'Apakah transaksi di DAYA MART aman?', answer: 'Ya! Kami menggunakan payment gateway resmi dan semua data pelanggan dienkripsi. Kami juga 100% amanah — jika pesanan gagal, uang Anda akan dikembalikan.', category: 'Umum', sortOrder: 3, isActive: true },
-];
-
-const DEFAULT_CONTACTS: SocialContact[] = [
-  { id: 'sc-1', platform: 'WhatsApp', logoUrl: '', username: '0878-0000-1232', link: 'https://wa.me/6287800001232', actionLabel: 'Chat', sortOrder: 0, isActive: true },
-  { id: 'sc-2', platform: 'Telegram', logoUrl: '', username: '@dayamart', link: 'https://t.me/dayamart', actionLabel: 'Chat', sortOrder: 1, isActive: true },
-  { id: 'sc-3', platform: 'Instagram', logoUrl: '', username: '@dayamart', link: 'https://instagram.com/dayamart', actionLabel: 'Follow', sortOrder: 2, isActive: true },
-];
-
 function getPlatformColor(platform: string) {
   const colors: Record<string, { bg: string; text: string; border: string }> = {
     'WhatsApp': { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' },
@@ -46,23 +32,19 @@ export default function BantuanPage() {
       const { data: faqData } = await supabase.from('faqs').select('*').eq('is_active', true).order('sort_order');
       const { data: contactData } = await supabase.from('social_links').select('*').eq('is_active', true).order('sort_order');
 
-      if (faqData && faqData.length > 0) {
+      if (faqData) {
         setFaqs(faqData.map((f: Record<string, unknown>) => ({
           id: f.id as string, question: f.question as string, answer: f.answer as string,
           category: (f.category as string) || 'Umum', sortOrder: (f.sort_order as number) || 0, isActive: true
         })));
-      } else {
-        setFaqs(DEFAULT_FAQS);
       }
 
-      if (contactData && contactData.length > 0) {
+      if (contactData) {
         setContacts(contactData.map((c: Record<string, unknown>) => ({
           id: c.id as string, platform: c.platform as string, logoUrl: (c.logo_url as string) || '',
           username: c.username as string, link: c.link as string, actionLabel: (c.action_label as string) || 'Chat',
           sortOrder: (c.sort_order as number) || 0, isActive: true
         })));
-      } else {
-        setContacts(DEFAULT_CONTACTS);
       }
     };
     loadData();

@@ -2,21 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ChevronRight, ShieldCheck, ArrowLeft, Package, MessageCircle } from 'lucide-react';
+import { ChevronRight, ShieldCheck, ArrowLeft, Package, MessageCircle, Copy, CheckCircle2, ExternalLink } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import BrandImage from '@/components/ui/BrandImage';
 import { createClient } from '@/lib/supabase/client';
 import type { NokosApp, NokosCountry } from '@/types';
-
-/* ─── Default seed data (fallback) ─── */
-const DEFAULT_APPS: NokosApp[] = [
-  { id: 'nk-1', name: 'Telegram', logoUrl: '', description: 'Nomor kosong Telegram untuk registrasi.', isActive: true, sortOrder: 0 },
-  { id: 'nk-2', name: 'WhatsApp', logoUrl: '', description: 'Nomor kosong WhatsApp untuk verifikasi.', isActive: true, sortOrder: 1 },
-];
-
-const DEFAULT_COUNTRIES: NokosCountry[] = [
-  { id: 'nc-1', appId: 'nk-1', countryCode: 'ID', countryName: 'Indonesia', flagEmoji: '🇮🇩', price: 5000, stock: 15, description: 'Nomor +62', isActive: true },
-];
 
 function getStockColor(stock: number) {
   if (stock === 0) return 'text-error';
@@ -36,10 +26,12 @@ export default function NokosPage() {
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
 
-  // Buy form
-  const [buyerName, setBuyerName] = useState('');
-  const [buyerPhone, setBuyerPhone] = useState('');
-  const [buySuccess, setBuySuccess] = useState(false);
+  // Buy flow (no name/WA input — buyer fills via WhatsApp)
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [orderDone, setOrderDone] = useState(false);
+  const [formatText, setFormatText] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [ownerWA, setOwnerWA] = useState('6287800001232');
 
   // Load from Supabase
   useEffect(() => {
@@ -48,24 +40,24 @@ export default function NokosPage() {
       const { data: appsData } = await supabase.from('nokos_apps').select('*').eq('is_active', true).order('sort_order');
       const { data: countriesData } = await supabase.from('nokos_countries').select('*').eq('is_active', true).order('country_name');
 
-      if (appsData && appsData.length > 0) {
+      if (appsData) {
         setApps(appsData.map((a: Record<string, unknown>) => ({
           id: a.id as string, name: a.name as string, logoUrl: (a.logo_url as string) || '',
           description: (a.description as string) || '', isActive: true, sortOrder: (a.sort_order as number) || 0
         })));
-      } else {
-        setApps(DEFAULT_APPS);
       }
 
-      if (countriesData && countriesData.length > 0) {
+      if (countriesData) {
         setCountries(countriesData.map((c: Record<string, unknown>) => ({
           id: c.id as string, appId: c.app_id as string, countryCode: c.country_code as string,
           countryName: c.country_name as string, flagEmoji: (c.flag_emoji as string) || '',
           price: Number(c.price), stock: c.stock as number, description: (c.description as string) || '', isActive: true
         })));
-      } else {
-        setCountries(DEFAULT_COUNTRIES);
       }
+
+      // Load owner WA
+      const { data: waData } = await supabase.from('settings').select('value').eq('key', 'owner_whatsapp').single();
+      if (waData?.value) setOwnerWA(waData.value);
     };
     loadData();
   }, []);
@@ -84,32 +76,57 @@ export default function NokosPage() {
     return appCs.length > 0 && appCs.every(c => c.stock === 0);
   }, [countries]);
 
-  const handleBuy = async () => {
-    if (!buyerName.trim() || !buyerPhone.trim() || !selectedCountry) return;
+  const handleConfirmBuy = async () => {
+    if (!selectedCountry || !selectedApp) return;
 
     const supabase = createClient();
-    // Decrease stock in Supabase
     const newStock = Math.max(0, selectedCountry.stock - 1);
     await supabase.from('nokos_countries').update({ stock: newStock }).eq('id', selectedCountry.id);
     setCountries(prev => prev.map(c => c.id === selectedCountry.id ? { ...c, stock: newStock } : c));
 
-    // Save order to Supabase
     const orderCode = `DM-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
     await supabase.from('orders').insert({
       order_code: orderCode,
-      product_name: `Nokos ${selectedApp?.name} - ${selectedCountry.countryName}`,
+      product_name: `Nokos ${selectedApp.name} - ${selectedCountry.countryName}`,
       module: 'nokos',
       amount: selectedCountry.price,
       process_status: 'waiting',
       payment_status: 'pending',
-      buyer_name: buyerName.trim(),
-      buyer_phone: buyerPhone.trim(),
     });
 
-    setBuySuccess(true);
-    setTimeout(() => setBuySuccess(false), 5000);
-    setBuyerName('');
-    setBuyerPhone('');
+    // Load message template
+    const { data: tmpl } = await supabase
+      .from('message_templates')
+      .select('content')
+      .eq('template_key', 'nokos')
+      .single();
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    let text = tmpl?.content || `Halo! Saya ingin order Nokos.\n\nOrder: Nokos {aplikasi} - {negara}\nOrder ID: {order_id}\nHarga: {harga}\nTanggal: ${dateStr}\n\nNama: (isi nama Anda)\nNo. WA: (isi nomor Anda)`;
+    text = text
+      .replace(/{order_id}/g, orderCode)
+      .replace(/{aplikasi}/g, selectedApp.name)
+      .replace(/{negara}/g, `${selectedCountry.flagEmoji} ${selectedCountry.countryName}`)
+      .replace(/{harga}/g, formatRupiah(selectedCountry.price))
+      .replace(/{nama}/g, '............')
+      .replace(/{nomor}/g, '(akan dikirim admin)');
+
+    setFormatText(text);
+    setOrderDone(true);
+    setShowConfirm(false);
+  };
+
+  const copyFormat = () => {
+    navigator.clipboard.writeText(formatText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const goToWhatsApp = () => {
+    const url = `https://wa.me/${ownerWA}?text=${encodeURIComponent(formatText)}`;
+    window.open(url, '_blank');
   };
 
   /* ─── LEVEL 3: Detail & Beli ─── */
@@ -121,23 +138,23 @@ export default function NokosPage() {
         <nav className="flex items-center gap-2 text-sm text-on-surface-variant flex-wrap">
           <Link href="/" className="hover:text-primary transition-colors">Beranda</Link>
           <ChevronRight size={14} />
-          <button onClick={() => { setSelectedAppId(null); setSelectedCountryId(null); }} className="hover:text-primary transition-colors">Nokos</button>
+          <button onClick={() => { setSelectedAppId(null); setSelectedCountryId(null); setOrderDone(false); }} className="hover:text-primary transition-colors">Nokos</button>
           <ChevronRight size={14} />
-          <button onClick={() => setSelectedCountryId(null)} className="hover:text-primary transition-colors">{selectedApp.name}</button>
+          <button onClick={() => { setSelectedCountryId(null); setOrderDone(false); }} className="hover:text-primary transition-colors">{selectedApp.name}</button>
           <ChevronRight size={14} />
           <span className="text-primary font-semibold">{selectedCountry.countryName}</span>
         </nav>
 
         {/* Back */}
-        <button onClick={() => setSelectedCountryId(null)}
+        <button onClick={() => { setSelectedCountryId(null); setOrderDone(false); }}
           className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors group">
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
           Kembali ke Negara
         </button>
 
         <div className="max-w-2xl mx-auto">
-          {/* Header */}
           <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-soft overflow-hidden">
+            {/* Header */}
             <div className="gradient-primary p-6 flex items-center gap-4">
               <BrandImage src={selectedApp.logoUrl} alt={`Logo ${selectedApp.name}`} size={56} rounded={14} fallbackText={selectedApp.name} disabled={outOfStock} />
               <div className="text-white">
@@ -158,36 +175,64 @@ export default function NokosPage() {
                 </div>
               </div>
 
-              {/* Success Message */}
-              {buySuccess && (
-                <div className="bg-accent-green/10 border border-accent-green/30 rounded-xl p-4 text-sm text-accent-green font-semibold flex items-center gap-2 animate-fade-in">
-                  <Package size={18} />
-                  Pesanan berhasil! Admin akan menghubungi Anda via WhatsApp untuk mengirim nomor.
+              {/* ── ORDER DONE: Format Pesan ── */}
+              {orderDone && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="bg-accent-green/10 border border-accent-green/30 rounded-xl p-4 text-sm text-accent-green font-semibold flex items-center gap-2">
+                    <CheckCircle2 size={18} />
+                    Pesanan tercatat! Salin format di bawah & kirim ke WhatsApp owner.
+                  </div>
+
+                  {/* Format text box */}
+                  <div className="bg-surface-container-low rounded-xl border border-outline-variant p-4">
+                    <p className="text-xs text-on-surface-variant font-semibold mb-2">📋 Format Pesan:</p>
+                    <pre className="text-sm text-on-surface whitespace-pre-wrap font-sans leading-relaxed">{formatText}</pre>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button onClick={copyFormat}
+                      className="flex-1 py-3 rounded-full border-2 border-primary text-primary font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary/5 transition-colors">
+                      {copied ? <><CheckCircle2 size={16} /> Tersalin!</> : <><Copy size={16} /> Salin Format</>}
+                    </button>
+                    <button onClick={goToWhatsApp}
+                      className="flex-1 py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2">
+                      <MessageCircle size={16} /> Lanjut ke WhatsApp
+                      <ExternalLink size={14} />
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {/* Form */}
-              {!outOfStock && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-on-surface mb-2">Nama Lengkap *</label>
-                    <input type="text" value={buyerName} onChange={e => setBuyerName(e.target.value)}
-                      placeholder="Masukkan nama Anda"
-                      className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              {/* ── CONFIRM DIALOG ── */}
+              {showConfirm && !orderDone && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-4 animate-fade-in">
+                  <p className="text-sm font-semibold text-amber-800">⚠️ Konfirmasi Pesanan</p>
+                  <div className="text-sm text-amber-700 space-y-1">
+                    <p>Aplikasi: <strong>{selectedApp.name}</strong></p>
+                    <p>Negara: <strong>{selectedCountry.flagEmoji} {selectedCountry.countryName}</strong></p>
+                    <p>Total: <strong className="text-primary">{formatRupiah(selectedCountry.price)}</strong></p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-on-surface mb-2">No. WhatsApp *</label>
-                    <input type="tel" value={buyerPhone} onChange={e => setBuyerPhone(e.target.value)}
-                      placeholder="08xxxxxxxxxx"
-                      className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+                  <div className="flex gap-3">
+                    <button onClick={() => setShowConfirm(false)}
+                      className="flex-1 py-2.5 rounded-full border border-outline-variant text-on-surface-variant font-semibold text-sm hover:bg-surface-container-high transition-colors">
+                      Batal
+                    </button>
+                    <button onClick={handleConfirmBuy}
+                      className="flex-1 py-2.5 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all">
+                      Konfirmasi & Pesan
+                    </button>
                   </div>
-                  <button onClick={handleBuy}
-                    disabled={!buyerName.trim() || !buyerPhone.trim()}
-                    className="w-full py-3.5 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                    <MessageCircle size={18} />
-                    Beli Sekarang — {formatRupiah(selectedCountry.price)}
-                  </button>
                 </div>
+              )}
+
+              {/* ── BUY BUTTON (initial state) ── */}
+              {!outOfStock && !showConfirm && !orderDone && (
+                <button onClick={() => setShowConfirm(true)}
+                  className="w-full py-3.5 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2">
+                  <MessageCircle size={18} />
+                  Pesan Sekarang — {formatRupiah(selectedCountry.price)}
+                </button>
               )}
 
               {outOfStock && (
@@ -207,7 +252,6 @@ export default function NokosPage() {
   if (selectedApp) {
     return (
       <div className="space-y-6 animate-fade-in">
-        {/* Breadcrumb */}
         <nav className="flex items-center gap-2 text-sm text-on-surface-variant flex-wrap">
           <Link href="/" className="hover:text-primary transition-colors">Beranda</Link>
           <ChevronRight size={14} />
@@ -216,14 +260,12 @@ export default function NokosPage() {
           <span className="text-primary font-semibold">{selectedApp.name}</span>
         </nav>
 
-        {/* Back */}
         <button onClick={() => setSelectedAppId(null)}
           className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors group">
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
           Kembali ke Aplikasi
         </button>
 
-        {/* Header */}
         <div className="flex items-center gap-4">
           <BrandImage src={selectedApp.logoUrl} alt={`Logo ${selectedApp.name}`} size={48} rounded={12} fallbackText={selectedApp.name} />
           <div>
@@ -232,7 +274,6 @@ export default function NokosPage() {
           </div>
         </div>
 
-        {/* Grid Negara */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {appCountries.map(country => {
             const out = country.stock === 0;
@@ -243,7 +284,6 @@ export default function NokosPage() {
                 disabled={out}
                 className={`relative bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-soft overflow-hidden flex flex-col items-center p-5 text-center transition-all ${out ? 'opacity-60 cursor-not-allowed' : 'shadow-hover-effect cursor-pointer hover:border-primary/40'}`}
               >
-                {/* Flag */}
                 <span className="text-4xl mb-3">{country.flagEmoji}</span>
                 <h3 className="font-semibold text-base text-on-surface">{country.countryName}</h3>
                 <p className={`text-sm font-semibold mt-1 ${getStockColor(country.stock)}`}>
@@ -251,7 +291,6 @@ export default function NokosPage() {
                 </p>
                 <p className="text-sm font-bold text-primary mt-2 font-[family-name:var(--font-heading)]">{formatRupiah(country.price)}</p>
 
-                {/* Out of stock overlay */}
                 {out && (
                   <div className="absolute inset-0 bg-gray-900/30 flex items-center justify-center rounded-2xl">
                     <span className="bg-gray-800 text-white text-xs font-bold px-3 py-1 rounded-full">Stok Habis</span>

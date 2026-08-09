@@ -195,14 +195,46 @@ export default function OwnerProdukPage() {
 
   const moduleLabel = (m: string) => MODULE_OPTIONS.find(o => o.value === m)?.label || m;
 
+  // Inline image upload
+  const inlineImageRef = useRef<HTMLInputElement>(null);
+  const [inlineUploadId, setInlineUploadId] = useState<string | null>(null);
+
+  const handleInlineImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !inlineUploadId) return;
+    if (file.size > 2 * 1024 * 1024) { alert('Maks 2MB'); return; }
+    const product = products.find(p => p.id === inlineUploadId);
+    if (!product) return;
+    const fd = new FormData();
+    fd.append('id', product.id);
+    fd.append('name', product.name);
+    fd.append('price_sell', product.price_sell.toString());
+    fd.append('stock', product.stock.toString());
+    fd.append('is_active', product.is_active.toString());
+    fd.append('module', product.module);
+    if (product.category) fd.append('category', product.category);
+    fd.append('image', file);
+    try {
+      const res = await fetch('/api/owner/products', { method: 'PUT', body: fd });
+      if (res.ok) {
+        const updated = await res.json();
+        setProducts(prev => prev.map(p => p.id === product.id ? updated : p));
+      }
+    } catch { /* ignore */ }
+    setInlineUploadId(null);
+    if (inlineImageRef.current) inlineImageRef.current.value = '';
+  };
+
   return (
     <div className="space-y-8">
+      <input type="file" ref={inlineImageRef} accept="image/*" className="hidden" onChange={handleInlineImage} />
+
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl lg:text-3xl font-bold text-on-surface tracking-tight font-[family-name:var(--font-heading)] flex items-center gap-3">
             <Package size={28} className="text-primary" /> Produk
           </h2>
-          <p className="text-sm text-on-surface-variant mt-1">Kelola produk dan layanan yang dijual. Total: {products.length} produk</p>
+          <p className="text-sm text-on-surface-variant mt-1">Kelola produk dan layanan. Total: {products.length}</p>
         </div>
         <button onClick={() => { resetForm(); setShowForm(true); }}
           className="px-5 py-2.5 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center gap-2">
@@ -210,7 +242,7 @@ export default function OwnerProdukPage() {
         </button>
       </div>
 
-      {/* Add/Edit Form */}
+      {/* Form */}
       {showForm && (
         <div className="bg-surface-container-lowest rounded-2xl border border-primary/15 p-6 shadow-soft animate-fade-in">
           <div className="flex items-center justify-between mb-5">
@@ -219,107 +251,84 @@ export default function OwnerProdukPage() {
             </h3>
             <button onClick={resetForm} className="p-1.5 rounded-full hover:bg-surface-container-high text-on-surface-variant"><X size={18} /></button>
           </div>
-
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-error/10 border border-error/30 rounded-xl mb-4 animate-fade-in">
-              <AlertCircle size={16} className="text-error shrink-0" />
-              <p className="text-sm text-error">{error}</p>
+            <div className="mb-4 p-3 bg-error/10 border border-error/20 rounded-xl text-sm text-error flex items-center gap-2">
+              <AlertCircle size={16} /> {error}
             </div>
           )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Col 1: Basic Info */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-on-surface mb-1.5">Nama Produk <span className="text-error">*</span></label>
-                  <input type="text" value={formName} onChange={e => setFormName(e.target.value)} placeholder="Contoh: Netflix Premium 1 Bulan"
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-on-surface mb-1.5">Modul</label>
-                  <select value={formModule} onChange={e => setFormModule(e.target.value)}
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all appearance-none cursor-pointer">
-                    {MODULE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-on-surface mb-1.5">Kategori</label>
-                    <input type="text" value={formCategory} onChange={e => setFormCategory(e.target.value)} placeholder="App Premium"
-                      className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-on-surface mb-1.5">Brand</label>
-                    <input type="text" value={formBrand} onChange={e => setFormBrand(e.target.value)} placeholder="Netflix"
-                      className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-                  </div>
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-on-surface mb-1.5">Nama Produk *</label>
+                <input type="text" value={formName} onChange={e => setFormName(e.target.value)} required
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-on-surface mb-1.5">Modul</label>
+                <select value={formModule} onChange={e => setFormModule(e.target.value)}
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+                  {MODULE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-on-surface mb-1.5">Kategori</label>
+                <input type="text" value={formCategory} onChange={e => setFormCategory(e.target.value)} placeholder="Top Up Game"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-on-surface mb-1.5">Brand</label>
+                <input type="text" value={formBrand} onChange={e => setFormBrand(e.target.value)} placeholder="Free Fire"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-on-surface mb-1.5">Nama Game</label>
+                <input type="text" value={formGameName} onChange={e => setFormGameName(e.target.value)} placeholder="Free Fire"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-on-surface mb-1.5">Label Mata Uang</label>
+                <input type="text" value={formCurrency} onChange={e => setFormCurrency(e.target.value)} placeholder="Diamonds"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-on-surface mb-1.5">Harga Jual (Rp) *</label>
+                <input type="number" value={formPrice} onChange={e => setFormPrice(e.target.value)} required
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-on-surface mb-1.5">Stok (-1 = ∞)</label>
+                <input type="number" value={formStock} onChange={e => setFormStock(e.target.value)}
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-on-surface mb-1.5">Gambar</label>
+                <div className="flex items-center gap-3">
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" id="product-image" />
+                  <label htmlFor="product-image"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-low border border-outline-variant rounded-xl text-sm cursor-pointer hover:border-primary transition-colors">
+                    <Upload size={16} /> Pilih Gambar
+                  </label>
+                  {formImagePreview && <img src={formImagePreview} alt="Preview" className="w-10 h-10 rounded-lg object-cover border" />}
                 </div>
               </div>
-
-              {/* Col 2: Pricing & Stock */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-on-surface mb-1.5">Harga Jual (Rp) <span className="text-error">*</span></label>
-                  <input type="number" value={formPrice} onChange={e => setFormPrice(e.target.value)} placeholder="45000" min={0}
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-on-surface mb-1.5">Stok <span className="text-xs text-on-surface-variant">(-1 = unlimited)</span></label>
-                  <input type="number" value={formStock} onChange={e => setFormStock(e.target.value)} min={-1}
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-on-surface mb-1.5">Nama Game</label>
-                    <input type="text" value={formGameName} onChange={e => setFormGameName(e.target.value)} placeholder="Mobile Legends"
-                      className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-on-surface mb-1.5">Mata Uang</label>
-                    <input type="text" value={formCurrency} onChange={e => setFormCurrency(e.target.value)} placeholder="Diamonds"
-                      className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-on-surface mb-1.5">Status</label>
-                  <button type="button" onClick={() => setFormIsActive(!formIsActive)}
-                    className={cn('w-full py-3 px-4 rounded-xl text-sm font-semibold border transition-all flex items-center justify-center gap-2',
-                      formIsActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-surface-container-low text-on-surface-variant border-outline-variant')}>
-                    {formIsActive ? <><Eye size={16} /> Aktif</> : <><EyeOff size={16} /> Nonaktif</>}
-                  </button>
-                </div>
+              <div className="flex items-center gap-3 mt-6">
+                <label className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-on-surface">
+                  <input type="checkbox" checked={formIsActive} onChange={e => setFormIsActive(e.target.checked)}
+                    className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary" />
+                  Aktif
+                </label>
               </div>
-
-              {/* Col 3: Image & Description */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-on-surface mb-1.5">Gambar Produk</label>
-                  <div onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-outline-variant rounded-xl p-4 text-center cursor-pointer hover:border-primary hover:bg-primary/[0.02] transition-all">
-                    {formImagePreview ? (
-                      <img src={formImagePreview} alt="Preview" className="w-full h-24 object-contain rounded-lg" />
-                    ) : (
-                      <>
-                        <Upload size={28} className="mx-auto text-on-surface-variant mb-1" />
-                        <p className="text-xs text-on-surface-variant">Klik untuk upload • Maks 2MB</p>
-                      </>
-                    )}
-                  </div>
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-on-surface mb-1.5">Deskripsi</label>
-                  <textarea value={formDescription} onChange={e => setFormDescription(e.target.value)} rows={4}
-                    placeholder="Deskripsi produk..."
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-none" />
-                </div>
-                <button type="submit" disabled={saving}
-                  className="w-full py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
-                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  {saving ? 'Menyimpan...' : editingId ? 'Simpan Perubahan' : 'Tambah Produk'}
-                </button>
+              <div>
+                <label className="block text-sm font-semibold text-on-surface mb-1.5">Deskripsi</label>
+                <textarea value={formDescription} onChange={e => setFormDescription(e.target.value)} rows={4}
+                  placeholder="Deskripsi produk..."
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-none" />
               </div>
+              <button type="submit" disabled={saving}
+                className="w-full py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {saving ? 'Menyimpan...' : editingId ? 'Simpan Perubahan' : 'Tambah Produk'}
+              </button>
             </div>
           </form>
         </div>
@@ -343,7 +352,7 @@ export default function OwnerProdukPage() {
         </div>
       </div>
 
-      {/* Product Table */}
+      {/* Product Table — with Profit columns + inline image upload */}
       <div className="bg-surface-container-lowest rounded-xl shadow-soft overflow-hidden border border-outline-variant/20">
         {loading ? (
           <div className="flex items-center justify-center py-20"><Loader2 size={32} className="animate-spin text-primary" /></div>
@@ -351,58 +360,74 @@ export default function OwnerProdukPage() {
           <div className="p-12 text-center">
             <Package size={48} className="mx-auto text-outline-variant mb-4" />
             <p className="text-on-surface-variant font-medium">{products.length === 0 ? 'Belum ada produk' : 'Tidak ada produk yang cocok'}</p>
-            <p className="text-xs text-on-surface-variant mt-1">{products.length === 0 ? 'Klik "Tambah Produk" untuk menambahkan produk baru.' : 'Coba ubah filter atau kata kunci pencarian.'}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[800px]">
+            <table className="w-full text-left border-collapse min-w-[900px]">
               <thead>
                 <tr className="bg-surface-container/50 border-b border-outline-variant">
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Produk</th>
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Kategori</th>
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Modul</th>
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Harga</th>
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Stok</th>
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Status</th>
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider text-right">Aksi</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Produk</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Modul</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Modal</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Profit</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Jual</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Stok</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Status</th>
+                  <th className="py-3 px-4 text-xs font-semibold text-on-surface-variant uppercase tracking-wider text-right">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/50">
-                {filtered.map(product => (
-                  <tr key={product.id} className="hover:bg-surface-container-low transition-colors">
-                    <td className="py-3 px-5">
-                      <div className="flex items-center gap-3">
-                        {product.image_url ? (
-                          <img src={product.image_url} alt={product.name} className="w-8 h-8 rounded-lg object-cover border border-outline-variant/20" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center">
-                            <ImageIcon size={14} className="text-outline-variant" />
-                          </div>
-                        )}
-                        <span className="text-sm font-semibold text-on-surface">{product.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-5 text-sm text-on-surface-variant">{product.category || '-'}</td>
-                    <td className="py-3 px-5">
-                      <span className="text-xs font-mono bg-surface-container-high px-2 py-1 rounded">{moduleLabel(product.module)}</span>
-                    </td>
-                    <td className="py-3 px-5 text-sm font-semibold text-on-surface">{formatRupiah(product.price_sell)}</td>
-                    <td className="py-3 px-5 text-sm text-on-surface-variant">{product.stock === -1 ? '∞' : product.stock}</td>
-                    <td className="py-3 px-5">
-                      <button onClick={() => toggleActive(product)}
-                        className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border cursor-pointer hover:opacity-80 transition-opacity',
-                          product.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200')}>
-                        {product.is_active ? <><Eye size={10} /> Aktif</> : <><EyeOff size={10} /> Nonaktif</>}
-                      </button>
-                    </td>
-                    <td className="py-3 px-5 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => startEdit(product)} className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/5 transition-colors"><Edit3 size={14} /></button>
-                        <button onClick={() => deleteProduct(product.id)} className="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-error/5 transition-colors"><Trash2 size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map(product => {
+                  const profit = product.price_sell - product.price_modal;
+                  return (
+                    <tr key={product.id} className="hover:bg-surface-container-low transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => { setInlineUploadId(product.id); inlineImageRef.current?.click(); }}
+                            className="relative group shrink-0" title="Ganti Gambar"
+                          >
+                            {product.image_url ? (
+                              <img src={product.image_url} alt={product.name} className="w-9 h-9 rounded-lg object-cover border border-outline-variant/20" />
+                            ) : (
+                              <div className="w-9 h-9 rounded-lg bg-surface-container-high flex items-center justify-center">
+                                <ImageIcon size={14} className="text-outline-variant" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <Upload size={12} className="text-white" />
+                            </div>
+                          </button>
+                          <span className="text-sm font-semibold text-on-surface">{product.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="text-xs font-mono bg-surface-container-high px-2 py-1 rounded">{moduleLabel(product.module)}</span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-on-surface-variant">{formatRupiah(product.price_modal)}</td>
+                      <td className="py-3 px-4">
+                        <span className={`text-sm font-semibold ${profit > 0 ? 'text-accent-green' : profit < 0 ? 'text-error' : 'text-on-surface-variant'}`}>
+                          {profit > 0 ? '+' : ''}{formatRupiah(profit)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm font-bold text-primary">{formatRupiah(product.price_sell)}</td>
+                      <td className="py-3 px-4 text-sm text-on-surface-variant">{product.stock === -1 ? '∞' : product.stock}</td>
+                      <td className="py-3 px-4">
+                        <button onClick={() => toggleActive(product)}
+                          className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border cursor-pointer hover:opacity-80 transition-opacity',
+                            product.is_active ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200')}>
+                          {product.is_active ? <><Eye size={10} /> Aktif</> : <><EyeOff size={10} /> Nonaktif</>}
+                        </button>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => startEdit(product)} className="p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/5 transition-colors"><Edit3 size={14} /></button>
+                          <button onClick={() => deleteProduct(product.id)} className="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-error/5 transition-colors"><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
