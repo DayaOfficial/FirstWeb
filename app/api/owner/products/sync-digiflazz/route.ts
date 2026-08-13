@@ -4,6 +4,7 @@ import { fetchPriceList } from '@/lib/providers/digiflazz';
 import { NextResponse } from 'next/server';
 
 // Mapping brand Digiflazz → game_key di game_input_templates
+// Semua game yang dikenal dipetakan; brand tak dikenal tetap masuk dengan game_key = null
 const BRAND_TO_GAMEKEY: Record<string, string> = {
   'FREE FIRE': 'free_fire',
   'MOBILE LEGENDS': 'mobile_legends',
@@ -13,6 +14,18 @@ const BRAND_TO_GAMEKEY: Record<string, string> = {
   'VALORANT': 'valorant',
   'ROBLOX': 'roblox',
   'HIGGS DOMINO': 'higgs_domino',
+  'CALL OF DUTY MOBILE': 'codm',
+  'CALL OF DUTY': 'codm',
+  'EFOOTBALL': 'efootball',
+  'ARENA OF VALOR': 'arena_of_valor',
+  'UNDAWN': 'undawn',
+  'DREAM LEAGUE SOCCER': 'dream_league',
+  'CLASH OF CLANS': 'clash_of_clans',
+  'LOL WILD RIFT': 'wild_rift',
+  'WILD RIFT': 'wild_rift',
+  'LEAGUE OF LEGENDS': 'wild_rift',
+  'STEAM WALLET': 'steam_wallet',
+  'STEAM': 'steam_wallet',
 };
 
 function mapCategory(cat: string): string {
@@ -57,7 +70,7 @@ export async function POST() {
         module: 'digiflazz',
         price_modal: item.price,
         price_sell: Math.round(item.price * 1.15), // default markup 15%
-        game_name: gameKey ? item.brand : null,
+        game_name: category === 'Game' ? item.brand : null,
         is_active: false, // owner aktifkan manual
         stock: item.unlimited_stock ? -1 : item.stock,
         seller_product_status: item.seller_product_status,
