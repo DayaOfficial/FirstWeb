@@ -30,6 +30,16 @@ export default function DiagnosaPage() {
         return;
       }
 
+      // Check auth metadata (is_owner() reads from here)
+      const authRole = user.user_metadata?.role;
+      out.push({
+        name: 'Auth metadata role=owner',
+        ok: authRole === 'owner',
+        message: authRole === 'owner'
+          ? 'auth metadata role=owner ✓ (is_owner() akan berfungsi)'
+          : `role="${authRole || 'null'}" — jalankan skrip SQL untuk memperbaiki`,
+      });
+
       const { data: prof, error: e1 } = await supabase
         .from('profiles')
         .select('role, status')

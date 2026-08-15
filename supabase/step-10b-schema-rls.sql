@@ -1,15 +1,28 @@
 -- ============================================================
--- STEP 10B — SKRIP SQL LENGKAP (Jalankan SEKALI di Supabase SQL Editor)
--- Idempoten: aman dijalankan ulang.
--- Menggunakan tabel "profiles" (sesuai kode yang ada).
+-- STEP 10B — SKRIP SQL LENGKAP (v3 — FIX infinite recursion)
+-- Jalankan SEKALI di Supabase SQL Editor. Idempoten.
 -- ============================================================
 
--- ============ FUNGSI is_owner ============
+-- ============ LANGKAH 0: Hapus SEMUA policy lama pada profiles ============
+-- Ini mencegah konflik/recursion dari policy lama
+DO $$
+DECLARE
+  pol record;
+BEGIN
+  FOR pol IN SELECT policyname FROM pg_policies WHERE tablename = 'profiles' AND schemaname = 'public'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.profiles', pol.policyname);
+  END LOOP;
+END $$;
+
+-- ============ FUNGSI is_owner — baca dari auth.users, BUKAN profiles ============
+-- Membaca dari auth.users (tanpa RLS) → menghindari infinite recursion
 create or replace function public.is_owner() returns boolean
 language sql stable security definer as $$
   select exists (
-    select 1 from public.profiles p
-    where p.id = auth.uid() and p.role = 'owner'
+    select 1 from auth.users
+    where id = auth.uid()
+    and raw_user_meta_data->>'role' = 'owner'
   );
 $$;
 
@@ -26,7 +39,6 @@ create table if not exists public.profiles (
   updated_at timestamptz default now()
 );
 
--- Tambahkan kolom jika belum ada
 alter table public.profiles add column if not exists username text;
 alter table public.profiles add column if not exists email text;
 alter table public.profiles add column if not exists role text default 'user';
@@ -35,7 +47,7 @@ alter table public.profiles add column if not exists avatar_url text;
 alter table public.profiles add column if not exists approved_at timestamptz;
 alter table public.profiles add column if not exists updated_at timestamptz default now();
 
--- Pastikan owner benar (status='approved' sesuai constraint yang ada)
+-- Pastikan owner benar di profiles
 insert into public.profiles (id, email, username, role, status)
 select id, email, 'DayaMart', 'owner', 'approved'
 from auth.users
@@ -44,6 +56,11 @@ on conflict (id) do update
   set role = 'owner',
       status = 'approved',
       updated_at = now();
+
+-- Pastikan auth metadata juga ada role=owner (ini yang dibaca is_owner)
+update auth.users
+set raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || '{"role": "owner"}'::jsonb
+where email = 'dayamartweb@gmail.com';
 
 -- ============ SETTINGS ============
 create table if not exists public.settings (
@@ -76,7 +93,6 @@ create table if not exists public.products (
   created_at timestamptz default now()
 );
 
--- Kolom tambahan jika tabel sudah ada tapi kolom belum
 alter table public.products add column if not exists profit_type text default 'fixed';
 alter table public.products add column if not exists profit_value numeric default 0;
 alter table public.products add column if not exists image_url text;
@@ -199,6 +215,7 @@ create table if not exists public.sync_logs (
 );
 
 -- ============ RLS: BACA untuk semua login, TULIS hanya owner ============
+-- Untuk tabel-tabel NON-profiles, pakai is_owner() (aman, baca auth.users)
 do $$
 declare t text;
 begin
@@ -220,25 +237,26 @@ begin
   end loop;
 end $$;
 
--- profiles: baca semua login; update diri sendiri atau owner; hapus hanya owner
+-- ============ PROFILES RLS (policy bersih, TANPA recursion) ============
 alter table public.profiles enable row level security;
-drop policy if exists profiles_sel on public.profiles;
-create policy profiles_sel on public.profiles for select to authenticated using (true);
-drop policy if exists profiles_upd on public.profiles;
-create policy profiles_upd on public.profiles for update to authenticated
-  using (auth.uid() = id or public.is_owner());
-drop policy if exists profiles_del on public.profiles;
-create policy profiles_del on public.profiles for delete to authenticated
-  using (public.is_owner() and id <> auth.uid());
-drop policy if exists profiles_ins on public.profiles;
-create policy profiles_ins on public.profiles for insert to authenticated
-  with check (auth.uid() = id or public.is_owner());
 
--- Hapus kebijakan lama yang mungkin bertabrakan
-drop policy if exists "users_read_own_profile" on public.profiles;
-drop policy if exists "users_update_own_profile" on public.profiles;
+-- Semua user login bisa baca profiles
+create policy profiles_sel on public.profiles
+  for select to authenticated using (true);
 
--- orders: baca owner/diri sendiri; insert semua login; update owner/diri sendiri
+-- Insert: hanya untuk diri sendiri (register)
+create policy profiles_ins on public.profiles
+  for insert to authenticated with check (auth.uid() = id);
+
+-- Update: diri sendiri ATAU owner (is_owner sekarang baca auth.users, bukan profiles)
+create policy profiles_upd on public.profiles
+  for update to authenticated using (auth.uid() = id or public.is_owner());
+
+-- Delete: hanya owner, tidak bisa hapus diri sendiri
+create policy profiles_del on public.profiles
+  for delete to authenticated using (public.is_owner() and id <> auth.uid());
+
+-- ============ ORDERS RLS ============
 alter table public.orders enable row level security;
 drop policy if exists orders_sel on public.orders;
 create policy orders_sel on public.orders for select to authenticated
@@ -250,36 +268,30 @@ drop policy if exists orders_upd on public.orders;
 create policy orders_upd on public.orders for update to authenticated
   using (public.is_owner() or user_id = auth.uid());
 
--- ============ STORAGE: bucket publik + izin upload ============
+-- ============ STORAGE ============
 insert into storage.buckets (id, name, public)
-  values ('brand-logos', 'brand-logos', true)
-  on conflict (id) do nothing;
+  values ('brand-logos', 'brand-logos', true) on conflict (id) do nothing;
 insert into storage.buckets (id, name, public)
-  values ('avatars', 'avatars', true)
-  on conflict (id) do nothing;
+  values ('avatars', 'avatars', true) on conflict (id) do nothing;
 insert into storage.buckets (id, name, public)
-  values ('banners', 'banners', true)
-  on conflict (id) do nothing;
+  values ('banners', 'banners', true) on conflict (id) do nothing;
 insert into storage.buckets (id, name, public)
-  values ('products', 'products', true)
-  on conflict (id) do nothing;
+  values ('products', 'products', true) on conflict (id) do nothing;
 
--- Storage policies
 drop policy if exists storage_read on storage.objects;
 create policy storage_read on storage.objects for select to public
   using (bucket_id in ('brand-logos', 'avatars', 'banners', 'products'));
-
 drop policy if exists storage_write on storage.objects;
 create policy storage_write on storage.objects for insert to authenticated
   with check (bucket_id in ('brand-logos', 'avatars', 'banners', 'products'));
-
 drop policy if exists storage_upd on storage.objects;
 create policy storage_upd on storage.objects for update to authenticated
   using (bucket_id in ('brand-logos', 'avatars', 'banners', 'products'));
-
 drop policy if exists storage_del on storage.objects;
 create policy storage_del on storage.objects for delete to authenticated
   using (bucket_id in ('brand-logos', 'avatars', 'banners', 'products'));
 
 -- ============ SELESAI ============
--- Jalankan halaman Diagnosa untuk memverifikasi semua baris hijau ✅.
+-- Sekarang is_owner() baca dari auth.users metadata (bukan profiles),
+-- sehingga TIDAK ada infinite recursion.
+-- Jalankan halaman Diagnosa untuk memverifikasi semua ✅.
