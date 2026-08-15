@@ -1,10 +1,8 @@
-import { createClient } from '@/lib/supabase/server';
-import { createServiceClient } from '@/lib/supabase/server';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { fetchPriceList } from '@/lib/providers/digiflazz';
 import { NextResponse } from 'next/server';
 
 // Mapping brand Digiflazz → game_key di game_input_templates
-// Semua game yang dikenal dipetakan; brand tak dikenal tetap masuk dengan game_key = null
 const BRAND_TO_GAMEKEY: Record<string, string> = {
   'FREE FIRE': 'free_fire',
   'MOBILE LEGENDS': 'mobile_legends',
@@ -28,6 +26,8 @@ const BRAND_TO_GAMEKEY: Record<string, string> = {
   'STEAM': 'steam_wallet',
 };
 
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+
 function mapCategory(cat: string): string {
   const c = (cat ?? '').toLowerCase();
   if (c.includes('games') || c.includes('voucher game')) return 'Game';
@@ -46,55 +46,97 @@ export async function POST() {
 
   const { data: profile } = await supabase
     .from('profiles').select('role').eq('id', user.id).single();
-  if (profile?.role !== 'owner') return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  if (profile?.role !== 'owner' && user.user_metadata?.role !== 'owner') {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
 
-  // Fetch dari Digiflazz
   const serviceSupabase = createServiceClient();
 
   try {
     const items = await fetchPriceList('prepaid');
-    let inserted = 0;
+    let saved = 0;
+    let errors = 0;
 
     for (const item of items) {
-      if (!item.buyer_product_status) continue; // skip produk tidak aktif
+      if (!item.buyer_product_status) continue; // skip produk tidak aktif di Digiflazz
 
       const brandUpper = (item.brand ?? '').toUpperCase();
       const gameKey = BRAND_TO_GAMEKEY[brandUpper] ?? null;
       const category = mapCategory(item.category);
+      const isGame = category === 'Game';
 
-      await serviceSupabase.from('products').upsert({
-        buyer_sku_code: item.buyer_sku_code,
+      const row = {
+        module: 'digiflazz',
+        provider_code: item.buyer_sku_code,
         name: item.product_name,
         brand: item.brand,
         category,
-        module: 'digiflazz',
         price_modal: item.price,
-        price_sell: Math.round(item.price * 1.15), // default markup 15%
-        game_name: category === 'Game' ? item.brand : null,
-        is_active: false, // owner aktifkan manual
+        game_key: gameKey,
+        game_slug: isGame ? slug(item.brand) : null,
+        game_name: isGame ? item.brand : null,
         stock: item.unlimited_stock ? -1 : item.stock,
-        seller_product_status: item.seller_product_status,
-        unlimited_stock: item.unlimited_stock,
-        multi: item.multi,
-        start_cut_off: item.start_cut_off || null,
-        end_cut_off: item.end_cut_off || null,
-        synced_at: new Date().toISOString(),
-      }, { onConflict: 'buyer_sku_code' });
+      };
 
-      inserted++;
+      // Cek existing by provider_code, lalu insert ATAU update
+      const { data: existing } = await serviceSupabase
+        .from('products')
+        .select('id, price_sell, is_active, image_url, profit_type, profit_value')
+        .eq('provider_code', item.buyer_sku_code)
+        .single();
+
+      if (existing) {
+        // Update: PERTAHANKAN price_sell, is_active, image_url yang sudah di-set owner
+        const { error: upErr } = await serviceSupabase
+          .from('products')
+          .update({
+            ...row,
+            price_sell: existing.price_sell, // owner's price preserved
+            is_active: existing.is_active,   // owner's toggle preserved
+            image_url: existing.image_url,   // owner's image preserved
+            profit_type: existing.profit_type,
+            profit_value: existing.profit_value,
+          })
+          .eq('id', existing.id);
+
+        if (upErr) {
+          console.error(`[sync-digiflazz] update error for ${item.buyer_sku_code}:`, upErr.message);
+          errors++;
+        } else {
+          saved++;
+        }
+      } else {
+        // Insert: baru → default markup 15%, is_active=false (owner aktifkan manual)
+        const { error: insErr } = await serviceSupabase
+          .from('products')
+          .insert({
+            ...row,
+            price_sell: Math.round(item.price * 1.15),
+            is_active: false,
+          });
+
+        if (insErr) {
+          console.error(`[sync-digiflazz] insert error for ${item.buyer_sku_code}:`, insErr.message);
+          errors++;
+        } else {
+          saved++;
+        }
+      }
     }
 
     // Log sync
     await serviceSupabase.from('sync_logs').insert({
       provider: 'digiflazz',
       action: 'price_list_sync',
-      total_items: inserted,
-      status: 'success',
+      total_items: saved,
+      status: errors > 0 ? 'partial' : 'success',
+      error_message: errors > 0 ? `${errors} item gagal` : null,
     });
 
-    return NextResponse.json({ synced: inserted });
+    return NextResponse.json({ synced: saved, errors });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[sync-digiflazz] fatal:', message);
 
     await serviceSupabase.from('sync_logs').insert({
       provider: 'digiflazz',

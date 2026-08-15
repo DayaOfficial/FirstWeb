@@ -93,6 +93,10 @@ export default function OwnerApiPage() {
     (async () => {
       try {
         const res = await fetch('/api/owner/settings');
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          console.error('[API Config] load error:', errData?.error || res.status);
+        }
         if (res.ok) {
           const settings: Record<string, string> = await res.json();
 
@@ -110,8 +114,8 @@ export default function OwnerApiPage() {
 
           setConfigs(newConfigs);
         }
-      } catch {
-        // Supabase may not be configured yet
+      } catch (err) {
+        console.error('[API Config] load settings error:', err);
       } finally {
         setLoadingSettings(false);
       }
@@ -212,9 +216,15 @@ export default function OwnerApiPage() {
         setSaved(providerId);
         setEditing(null);
         setTimeout(() => setSaved(null), 2000);
+      } else {
+        const errData = await res.json().catch(() => null);
+        const msg = errData?.error || `HTTP ${res.status}`;
+        alert('Gagal menyimpan: ' + msg);
+        console.error('[API Config] save error:', msg);
       }
-    } catch {
-      // ignore
+    } catch (err: any) {
+      alert('Gagal menyimpan: Kesalahan jaringan');
+      console.error('[API Config] save error:', err);
     }
     setSaving(false);
   };

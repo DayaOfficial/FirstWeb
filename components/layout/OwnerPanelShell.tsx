@@ -7,7 +7,7 @@ import {
   Home, Package, ShoppingCart, Users, Image, Settings,
   Link2, Menu, X, LogOut, ShieldCheck, HelpCircle,
   Wallet, Gamepad2, Smartphone, Zap, CreditCard, Share2,
-  Bot, Crown, FileText, Search
+  Bot, Crown, FileText, Search, Stethoscope
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
@@ -30,6 +30,7 @@ const panelNav = [
   { icon: ShoppingCart, label: 'Transaksi', href: '/panel/x7k9m2-daya-owner/pesanan' },
   { icon: HelpCircle, label: 'Bantuan & FAQ', href: '/panel/x7k9m2-daya-owner/bantuan' },
   { icon: Settings, label: 'Pengaturan', href: '/panel/x7k9m2-daya-owner/pengaturan' },
+  { icon: Stethoscope, label: 'Diagnosa', href: '/panel/x7k9m2-daya-owner/diagnosa' },
 ];
 
 export default function OwnerPanelShell({ ownerName, children }: { ownerName: string; children: React.ReactNode }) {

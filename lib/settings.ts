@@ -14,11 +14,19 @@ export async function loadSettings(sb: SupabaseClient, keys: string[]): Promise<
   return m;
 }
 
-export async function saveSettings(sb: SupabaseClient, entries: Record<string, string>) {
+export async function saveSettings(
+  sb: SupabaseClient,
+  entries: Record<string, string>
+): Promise<{ success: boolean; error?: string }> {
   const rows = Object.entries(entries).map(([key, value]) => ({
     key,
     value,
     updated_at: new Date().toISOString(),
   }));
-  await sb.from('settings').upsert(rows, { onConflict: 'key' });
+  const { error } = await sb.from('settings').upsert(rows, { onConflict: 'key' });
+  if (error) {
+    console.error('[saveSettings]', error.message);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
 }
