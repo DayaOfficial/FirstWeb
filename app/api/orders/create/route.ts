@@ -19,10 +19,14 @@ export async function POST(req: Request) {
     nominal_code,
     nominal_name,
     amount,
+    quantity: rawQuantity,
     duration,
     buyer_name,
     buyer_phone,
   } = body;
+
+  // SMM orders pass actual quantity (e.g. 5000); default to 1 for non-SMM
+  const quantity = Number(rawQuantity) || 1;
 
   if (!amount || amount <= 0) {
     return NextResponse.json({ error: 'Jumlah pembayaran tidak valid' }, { status: 400 });
@@ -60,7 +64,7 @@ export async function POST(req: Request) {
       product_id: (product_id && !product_id.startsWith('fallback-')) ? product_id : null,
       module,
       product_name: resolvedProductName,
-      quantity: 1,
+      quantity,
       amount: Number(amount),
       buyer_name: buyer_name || null,
       buyer_phone: buyer_phone || null,

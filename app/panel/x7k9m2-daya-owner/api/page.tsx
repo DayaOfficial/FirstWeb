@@ -48,11 +48,11 @@ const PROVIDERS: ProviderDef[] = [
     bgColor: 'bg-purple-100',
     textColor: 'text-purple-600',
     settingsMap: {
-      baseUrl: 'jokerpanel_base_url',
+      apiId: 'jokerpanel_api_id',
       apiKey: 'jokerpanel_api_key',
     },
     fields: [
-      { key: 'baseUrl', label: 'Base URL', type: 'text', placeholder: 'https://jokerpanel.com/api/v2' },
+      { key: 'apiId', label: 'API ID', type: 'text', placeholder: 'Contoh: 11 (angka dari panel JokerPanel)' },
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Masukkan API Key JokerPanel' },
     ],
   },
@@ -86,7 +86,7 @@ export default function OwnerApiPage() {
   const [testing, setTesting] = useState<string | null>(null);
   const [configs, setConfigs] = useState<Record<string, ProviderConfig>>({
     digiflazz: { username: '', apiKey: '', nomorTujuan: '', kodeProduk: '' },
-    jokerpanel: { baseUrl: 'https://jokerpanel.com/api/v2', apiKey: '' },
+    jokerpanel: { apiId: '', apiKey: '' },
     pakasir: { slug: '', apiKey: '' },
   });
 
@@ -108,7 +108,7 @@ export default function OwnerApiPage() {
     setTesting(null);
   };
 
-  // Detect JokerPanel endpoint
+  // Test JokerPanel connection (official API)
   const handleDetectJoker = async () => {
     setTesting('jokerpanel');
     setTestResult(null);
@@ -116,9 +116,7 @@ export default function OwnerApiPage() {
       const res = await fetch('/api/owner/joker/detect', { method: 'POST' });
       const data = await res.json();
       if (data.ok) {
-        setTestResult({ provider: 'jokerpanel', msg: `✅ Endpoint ditemukan: ${data.url} — Saldo: $${Number(data.balance).toFixed(2)}`, ok: true });
-        // Update baseUrl in form
-        setConfigs(prev => ({ ...prev, jokerpanel: { ...prev.jokerpanel, baseUrl: data.url } }));
+        setTestResult({ provider: 'jokerpanel', msg: `✅ Terhubung! Saldo: ${data.currency} ${Number(data.balance).toLocaleString('id-ID')}`, ok: true });
       } else {
         setTestResult({ provider: 'jokerpanel', msg: `❌ ${data.error}`, ok: false });
       }
@@ -376,8 +374,8 @@ export default function OwnerApiPage() {
                           disabled={testing === 'jokerpanel'}
                           className="px-4 py-2.5 rounded-lg border border-purple-200 bg-purple-50 text-purple-700 text-sm font-semibold hover:bg-purple-100 transition-all flex items-center gap-1.5 disabled:opacity-50"
                         >
-                          {testing === 'jokerpanel' ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                          Deteksi
+                          {testing === 'jokerpanel' ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                          Uji
                         </button>
                       )}
                     </div>

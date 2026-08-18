@@ -46,14 +46,15 @@ export async function getDigiflazz() {
 }
 
 /**
- * Get JokerPanel credentials.
+ * Get JokerPanel credentials (Official API format).
  * Source priority: Supabase settings → process.env
+ * Auth: api_id (int) + api_key (string) — per jokerpanel.com/doc
  */
 export async function getJoker() {
-  const m = await getSettings(['jokerpanel_api_key', 'jokerpanel_base_url']);
+  const m = await getSettings(['jokerpanel_api_id', 'jokerpanel_api_key']);
   return {
-    key: m.jokerpanel_api_key || process.env.JOKERPANEL_API_KEY || '',
-    base: m.jokerpanel_base_url || process.env.JOKERPANEL_BASE_URL || 'https://jokerpanel.com/api/v2',
+    apiId: Number(m.jokerpanel_api_id || process.env.JOKERPANEL_API_ID || 0),
+    apiKey: m.jokerpanel_api_key || process.env.JOKERPANEL_API_KEY || '',
   };
 }
 

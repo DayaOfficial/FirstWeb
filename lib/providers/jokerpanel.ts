@@ -1,67 +1,57 @@
 import { getJoker } from '@/lib/server-config';
-import { postForm } from '@/lib/joker';
+import { jokerServices, jokerOrder, jokerStatus, type JokerConfig } from '@/lib/joker';
 
 /**
- * Internal call helper — reads credentials from Supabase settings (fallback: process.env).
- * Uses form-urlencoded (not JSON) because most SMM panels expect $_POST.
+ * JokerPanel provider — uses official API format (api_id + api_key).
+ * All functions read config from Supabase settings via server-config.
  */
-async function call(payload: Record<string, string>) {
+
+async function getCfg(): Promise<JokerConfig> {
   const cfg = await getJoker();
-  if (!cfg.key) {
-    throw new Error('Konfigurasi JokerPanel belum ada. Simpan di halaman Koneksi & API.');
+  if (!cfg.apiId || !cfg.apiKey) {
+    throw new Error('API ID / API Key JokerPanel belum diisi. Simpan di halaman Koneksi & API.');
   }
-  const r = await postForm(cfg.base, { key: cfg.key, ...payload });
-  if (r.json === null) {
-    throw new Error(
-      `Respons bukan JSON dari ${cfg.base} (status ${r.status}). Jalankan "Deteksi Endpoint" di halaman Koneksi API.`
-    );
-  }
-  if (r.json?.error) {
-    throw new Error(`JokerPanel error: ${r.json.error}`);
-  }
-  return r.json;
+  return cfg;
 }
 
-/** Ambil semua layanan yang tersedia */
+/** Ambil semua layanan yang tersedia — POST /api/services */
 export async function getServices(): Promise<JokerService[]> {
-  const json = await call({ action: 'services' });
-  // Guard: wajib array — mencegah "e is not iterable"
-  return Array.isArray(json) ? json : [];
+  const cfg = await getCfg();
+  const json = await jokerServices(cfg);
+  const list = json.services || json.data || json;
+  return Array.isArray(list) ? list : [];
 }
 
-/** Kirim order SMM */
-export async function addOrder(service: number, link: string, quantity: number) {
-  return call({
-    action: 'add',
-    service: String(service),
-    link,
-    quantity: String(quantity),
-  }) as Promise<{ order: number }>;
+/** Kirim order SMM — POST /api/order */
+export async function addOrder(service: number, target: string, quantity: number) {
+  const cfg = await getCfg();
+  return jokerOrder(cfg, service, target, quantity) as Promise<{ order: number }>;
 }
 
-/** Cek status order */
+/** Cek status order — POST /api/status */
 export async function getOrderStatus(order: number) {
-  return call({ action: 'status', order: String(order) }) as Promise<JokerOrderStatus>;
+  const cfg = await getCfg();
+  return jokerStatus(cfg, order) as Promise<JokerOrderStatus>;
 }
 
 // === Types ===
 
 export interface JokerService {
-  service: number;
+  id: number;
   name: string;
   type: string;
-  rate: string;
-  min: string;
-  max: string;
-  dripfeed: boolean;
+  price: string;
+  min: string | number;
+  max: string | number;
+  description: string;
+  category: string;
   refill: boolean;
   cancel: boolean;
-  category: string;
 }
 
 export interface JokerOrderStatus {
   order: number;
-  status: 'Pending' | 'In progress' | 'Completed' | 'Partial' | 'Canceled';
+  order_status: 'pending' | 'processing' | 'completed' | 'canceled' | 'partial';
   charge: string;
   start_count: string;
   remains: string;

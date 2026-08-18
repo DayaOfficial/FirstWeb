@@ -16,6 +16,8 @@ interface SMMService {
   price_per_k: number;
   provider_service_id: string;
   description: string;
+  min_qty: number;
+  max_qty: number;
 }
 
 // Detect service type from name
@@ -53,7 +55,7 @@ export default function SMMPanelPage() {
     (async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price_sell, provider_code, description')
+        .select('id, name, brand, price_sell, provider_code, description, min_qty, max_qty')
         .eq('module', 'jokerpanel')
         .eq('is_active', true)
         .order('brand', { ascending: true });
@@ -69,6 +71,8 @@ export default function SMMPanelPage() {
         price_per_k: Number(p.price_sell),
         provider_service_id: p.provider_code ?? '',
         description: p.description ?? '',
+        min_qty: Number(p.min_qty) || 10,
+        max_qty: Number(p.max_qty) || 100000,
       })));
       setLoading(false);
     })();
@@ -236,9 +240,13 @@ export default function SMMPanelPage() {
           </div>
 
           <label className="text-sm font-semibold text-on-surface">Jumlah</label>
-          <input type="number" value={quantity} onChange={e => setQuantity(Math.max(100, Number(e.target.value)))}
-            min={100} step={100}
+          <input type="number" value={quantity}
+            onChange={e => setQuantity(Math.min(selectedService.max_qty, Math.max(selectedService.min_qty, Number(e.target.value))))}
+            min={selectedService.min_qty} max={selectedService.max_qty} step={100}
             className="w-full mt-1 px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+          <p className="text-[11px] text-on-surface-variant mt-1">
+            Min {selectedService.min_qty.toLocaleString('id-ID')} · Max {selectedService.max_qty.toLocaleString('id-ID')}
+          </p>
 
           {/* Price summary */}
           <div className="mt-3 p-3 rounded-xl bg-surface-container-high flex justify-between text-sm">
@@ -288,6 +296,7 @@ export default function SMMPanelPage() {
                   product_name: state.nominal?.name,
                   target_input: targetLink,
                   amount: totalPrice,
+                  quantity,
                   nominal_code: selectedService?.provider_service_id,
                 }),
               });
