@@ -53,7 +53,9 @@ export async function POST() {
   const serviceSupabase = createServiceClient();
 
   try {
-    const items = await fetchPriceList('prepaid');
+    const rawItems = await fetchPriceList('prepaid');
+    // Double guard: pastikan array, mencegah "e is not iterable"
+    const items = Array.isArray(rawItems) ? rawItems : [];
     let saved = 0;
     let errors = 0;
 

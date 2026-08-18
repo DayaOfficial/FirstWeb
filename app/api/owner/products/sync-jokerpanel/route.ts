@@ -22,7 +22,9 @@ export async function POST() {
   const serviceSupabase = createServiceClient();
 
   try {
-    const services = await getServices();
+    const rawServices = await getServices();
+    // Double guard: pastikan array, mencegah "e is not iterable"
+    const services = Array.isArray(rawServices) ? rawServices : [];
     let inserted = 0;
 
     for (const s of services) {

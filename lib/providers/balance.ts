@@ -1,88 +1,82 @@
 import crypto from 'crypto';
+import { getDigiflazz, getJoker, fetchJson } from '@/lib/server-config';
 
 /**
  * Cek saldo deposit Digiflazz
- * Endpoint: POST https://api.digiflazz.com/v1/cek-saldo
- * Sign: md5(username + apiKey + "deposit")
+ * Reads credentials from Supabase settings (fallback: process.env)
  */
 export async function getDigiflazzBalance() {
-  const username = process.env.DIGIFLAZZ_USERNAME;
-  const apiKey = process.env.DIGIFLAZZ_API_KEY;
+  const cfg = await getDigiflazz();
 
-  if (!username || !apiKey) {
+  if (!cfg.username || !cfg.apiKey) {
     return {
       provider: 'digiflazz' as const,
       balance: 0,
       currency: 'IDR',
-      error: 'DIGIFLAZZ_USERNAME atau DIGIFLAZZ_API_KEY belum dikonfigurasi',
+      error: 'Konfigurasi Digiflazz belum ada. Simpan di halaman Koneksi & API.',
     };
   }
 
   const sign = crypto
     .createHash('md5')
-    .update(username + apiKey + 'deposit')
+    .update(cfg.username + cfg.apiKey + 'deposit')
     .digest('hex');
 
   try {
-    const res = await fetch('https://api.digiflazz.com/v1/cek-saldo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cmd: 'deposit', username, sign }),
+    const json = await fetchJson('https://api.digiflazz.com/v1/cek-saldo', {
+      cmd: 'deposit',
+      username: cfg.username,
+      sign,
     });
-    const json = await res.json();
     return {
       provider: 'digiflazz' as const,
-      balance: Number(json.data?.deposit ?? 0),
+      balance: Number(json.data?.deposit ?? json.data?.saldo ?? 0),
       currency: 'IDR',
       raw: json,
     };
-  } catch (err) {
+  } catch (err: any) {
     return {
       provider: 'digiflazz' as const,
       balance: 0,
       currency: 'IDR',
-      error: 'Gagal menghubungi API Digiflazz',
+      error: err.message || 'Gagal menghubungi API Digiflazz',
     };
   }
 }
 
 /**
  * Cek saldo JokerPanel
- * Endpoint: POST ke JOKERPANEL_BASE_URL
- * Body: { key, action: "balance" }
+ * Reads credentials from Supabase settings (fallback: process.env)
  */
 export async function getJokerPanelBalance() {
-  const apiKey = process.env.JOKERPANEL_API_KEY;
-  const baseUrl = process.env.JOKERPANEL_BASE_URL;
+  const cfg = await getJoker();
 
-  if (!apiKey || !baseUrl) {
+  if (!cfg.key) {
     return {
       provider: 'jokerpanel' as const,
       balance: 0,
       currency: 'USD',
-      error: 'JOKERPANEL_API_KEY atau JOKERPANEL_BASE_URL belum dikonfigurasi',
+      error: 'Konfigurasi JokerPanel belum ada. Simpan di halaman Koneksi & API.',
     };
   }
 
   try {
-    const res = await fetch(baseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: apiKey, action: 'balance' }),
+    const json = await fetchJson(cfg.base, {
+      key: cfg.key,
+      action: 'balance',
     });
-    const json = await res.json();
     return {
       provider: 'jokerpanel' as const,
       balance: Number(json.balance ?? 0),
       currency: json.currency ?? 'USD',
       raw: json,
     };
-  } catch (err) {
+  } catch (err: any) {
     return {
       provider: 'jokerpanel' as const,
       balance: 0,
       currency: 'USD',
-      error: 'Gagal menghubungi API JokerPanel',
+      error: err.message || 'Gagal menghubungi API JokerPanel',
     };
   }
 }

@@ -1,34 +1,37 @@
 import crypto from 'crypto';
+import { getDigiflazz, fetchJson } from '@/lib/server-config';
 
 const BASE = 'https://api.digiflazz.com/v1';
 
-function sign(ref: string) {
-  return crypto
-    .createHash('md5')
-    .update(process.env.DIGIFLAZZ_USERNAME! + process.env.DIGIFLAZZ_API_KEY! + ref)
-    .digest('hex');
-}
-
 /**
  * Ambil daftar harga produk Digiflazz
+ * Reads credentials from Supabase settings (fallback: process.env)
  * Sign: md5(username + apiKey + "pricelist")
  */
-export async function fetchPriceList(cmd: 'prepaid' | 'pasca' = 'prepaid') {
-  const res = await fetch(`${BASE}/price-list`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      cmd,
-      username: process.env.DIGIFLAZZ_USERNAME,
-      sign: sign('pricelist'),
-    }),
+export async function fetchPriceList(cmd: 'prepaid' | 'pasca' = 'prepaid'): Promise<DigiflazzProduct[]> {
+  const cfg = await getDigiflazz();
+  if (!cfg.username || !cfg.apiKey) {
+    throw new Error('Konfigurasi Digiflazz belum ada. Simpan di halaman Koneksi & API.');
+  }
+
+  const sign = crypto
+    .createHash('md5')
+    .update(cfg.username + cfg.apiKey + 'pricelist')
+    .digest('hex');
+
+  const json = await fetchJson(`${BASE}/price-list`, {
+    cmd,
+    username: cfg.username,
+    sign,
   });
-  const json = await res.json();
-  return (json.data ?? []) as DigiflazzProduct[];
+
+  // Guard: wajib array — mencegah "e is not iterable"
+  return Array.isArray(json?.data) ? json.data : [];
 }
 
 /**
  * Kirim transaksi top-up Digiflazz
+ * Reads credentials from Supabase settings (fallback: process.env)
  * Sign: md5(username + apiKey + ref_id)
  */
 export async function sendTopup(params: {
@@ -36,22 +39,28 @@ export async function sendTopup(params: {
   customer_no: string;
   ref_id: string;
   allow_dot?: boolean;
-}) {
+}): Promise<DigiflazzTransaction> {
+  const cfg = await getDigiflazz();
+  if (!cfg.username || !cfg.apiKey) {
+    throw new Error('Konfigurasi Digiflazz belum ada. Simpan di halaman Koneksi & API.');
+  }
+
   const testing = process.env.DIGIFLAZZ_TESTING === 'true';
-  const res = await fetch(`${BASE}/transaction`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      username: process.env.DIGIFLAZZ_USERNAME,
-      buyer_sku_code: params.buyer_sku_code,
-      customer_no: params.customer_no,
-      ref_id: params.ref_id,
-      sign: sign(params.ref_id),
-      allow_dot: params.allow_dot,
-      testing,
-    }),
+  const sign = crypto
+    .createHash('md5')
+    .update(cfg.username + cfg.apiKey + params.ref_id)
+    .digest('hex');
+
+  const json = await fetchJson(`${BASE}/transaction`, {
+    username: cfg.username,
+    buyer_sku_code: params.buyer_sku_code,
+    customer_no: params.customer_no,
+    ref_id: params.ref_id,
+    sign,
+    allow_dot: params.allow_dot,
+    testing,
   });
-  const json = await res.json();
+
   return json.data as DigiflazzTransaction;
 }
 

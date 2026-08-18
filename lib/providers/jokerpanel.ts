@@ -1,17 +1,21 @@
-const BASE = process.env.JOKERPANEL_BASE_URL ?? 'https://jokerpanel.com/api/v2';
+import { getJoker, fetchJson } from '@/lib/server-config';
 
+/**
+ * Internal call helper — reads credentials from Supabase settings (fallback: process.env)
+ */
 async function call(payload: Record<string, unknown>) {
-  const res = await fetch(BASE, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key: process.env.JOKERPANEL_API_KEY, ...payload }),
-  });
-  return res.json();
+  const cfg = await getJoker();
+  if (!cfg.key) {
+    throw new Error('Konfigurasi JokerPanel belum ada. Simpan di halaman Koneksi & API.');
+  }
+  return fetchJson(cfg.base, { key: cfg.key, ...payload });
 }
 
 /** Ambil semua layanan yang tersedia */
 export async function getServices(): Promise<JokerService[]> {
-  return call({ action: 'services' }) as Promise<JokerService[]>;
+  const json = await call({ action: 'services' });
+  // Guard: wajib array — mencegah "e is not iterable"
+  return Array.isArray(json) ? json : [];
 }
 
 /** Kirim order SMM */

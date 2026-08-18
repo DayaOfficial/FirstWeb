@@ -2,13 +2,15 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Plus, Minus, Crown, Check, Trash2, Package, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Minus, Crown, Check, Trash2, Package, ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { ImagePicker } from '@/components/ui/ImagePicker';
 
 interface AppProduct {
   id: string;
   name: string;
   brand: string;
   is_active: boolean;
+  image_url: string | null;
 }
 
 interface Plan {
@@ -27,27 +29,41 @@ export default function AppPremiumOwnerPage() {
   const sb = createClient();
   const [apps, setApps] = useState<AppProduct[]>([]);
   const [plans, setPlans] = useState<Record<string, Plan[]>>({});
-  const [appForm, setAppForm] = useState({ name: '', category: 'Streaming' });
+  const [appForm, setAppForm] = useState({ name: '', category: 'Streaming', image_url: '' });
   const [planFor, setPlanFor] = useState<string | null>(null);
   const [pForm, setPForm] = useState({ plan: '1U', price: '', stock: '' });
   const [expandedApps, setExpandedApps] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { data: a } = await sb.from('products').select('*')
-      .eq('module', 'manual_app')
-      .order('brand').order('name');
-    const appList = (a as AppProduct[]) || [];
-    setApps(appList);
+    try {
+      setLoadError(null);
+      const { data: a, error: aErr } = await sb.from('products').select('*')
+        .eq('module', 'manual_app')
+        .order('brand').order('name');
 
-    const m: Record<string, Plan[]> = {};
-    for (const app of appList) {
-      const { data: p } = await sb.from('product_plans').select('*')
-        .eq('product_id', app.id)
-        .order('price');
-      m[app.id] = (p as Plan[]) || [];
+      if (aErr) {
+        console.error('[app-premium] load error:', aErr.message);
+        setLoadError(aErr.message);
+        return;
+      }
+
+      const appList = Array.isArray(a) ? (a as AppProduct[]) : [];
+      setApps(appList);
+
+      const m: Record<string, Plan[]> = {};
+      for (const app of appList) {
+        const { data: p } = await sb.from('product_plans').select('*')
+          .eq('product_id', app.id)
+          .order('price');
+        m[app.id] = Array.isArray(p) ? (p as Plan[]) : [];
+      }
+      setPlans(m);
+    } catch (err: any) {
+      console.error('[app-premium] unexpected:', err);
+      setLoadError(err?.message || 'Terjadi kesalahan');
     }
-    setPlans(m);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -55,19 +71,34 @@ export default function AppPremiumOwnerPage() {
   async function addApp() {
     if (!appForm.name) return alert('Nama aplikasi wajib diisi');
     setAdding(true);
-    await sb.from('products').insert({
+    const { error } = await sb.from('products').insert({
       module: 'manual_app',
       category: 'app_premium',
       name: appForm.name,
       brand: appForm.category,
+      image_url: appForm.image_url || null,
       is_active: true,
       price_sell: 0,
       price_modal: 0,
       manual_confirmation: true,
     });
-    setAppForm({ name: '', category: 'Streaming' });
-    await load();
+    if (error) {
+      alert('Gagal menambah aplikasi: ' + error.message);
+    } else {
+      setAppForm({ name: '', category: 'Streaming', image_url: '' });
+      await load();
+    }
     setAdding(false);
+  }
+
+  async function delApp(id: string) {
+    if (!confirm('Hapus aplikasi ini beserta semua plan-nya?')) return;
+    const { error } = await sb.from('products').delete().eq('id', id);
+    if (error) {
+      alert('Gagal menghapus: ' + error.message);
+    } else {
+      load();
+    }
   }
 
   async function addPlan(appId: string) {
@@ -122,12 +153,28 @@ export default function AppPremiumOwnerPage() {
         </p>
       </div>
 
+      {/* Load Error */}
+      {loadError && (
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 animate-fade-in">
+          ❌ Gagal memuat data: {loadError}
+        </div>
+      )}
+
       {/* Add App form */}
       <div className="rounded-2xl bg-surface-container-lowest border border-outline-variant/20 shadow-soft p-5">
         <h3 className="text-sm font-bold text-on-surface mb-3 flex items-center gap-2">
           <Plus size={16} className="text-primary" /> Tambah Aplikasi Baru
         </h3>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3 items-end">
+          {/* Image picker for new app */}
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-[11px] text-on-surface-variant font-medium">Logo</span>
+            <ImagePicker
+              current={appForm.image_url || null}
+              onSaved={url => setAppForm({ ...appForm, image_url: url })}
+              size={44}
+            />
+          </div>
           <input
             placeholder="Nama aplikasi (contoh: Netflix)"
             value={appForm.name}
@@ -152,7 +199,7 @@ export default function AppPremiumOwnerPage() {
       </div>
 
       {/* App list */}
-      {apps.length === 0 && (
+      {apps.length === 0 && !loadError && (
         <div className="text-center py-16 text-on-surface-variant">
           <Package size={40} className="mx-auto mb-3 opacity-40" />
           <p className="text-sm">Belum ada aplikasi. Tambahkan aplikasi pertama di atas.</p>
@@ -173,6 +220,14 @@ export default function AppPremiumOwnerPage() {
                   <div className="flex items-center justify-between px-5 py-4">
                     <button onClick={() => toggleApp(app.id)} className="flex items-center gap-3 flex-1 min-w-0">
                       {isExpanded ? <ChevronDown size={18} className="text-primary shrink-0" /> : <ChevronRight size={18} className="text-on-surface-variant shrink-0" />}
+                      {/* App image */}
+                      <div className="w-9 h-9 rounded-lg overflow-hidden bg-surface-container-high border border-outline-variant/20 flex items-center justify-center shrink-0">
+                        {app.image_url ? (
+                          <img src={app.image_url} alt={app.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageIcon size={16} className="text-outline-variant" />
+                        )}
+                      </div>
                       <div className="min-w-0">
                         <span className="font-bold text-on-surface">{app.name}</span>
                         <span className="text-xs text-on-surface-variant ml-2">
@@ -181,17 +236,35 @@ export default function AppPremiumOwnerPage() {
                       </div>
                     </button>
                     <div className="flex items-center gap-2 shrink-0">
+                      {/* Change image */}
+                      <ImagePicker
+                        current={app.image_url}
+                        size={32}
+                        onSaved={url => {
+                          sb.from('products').update({ image_url: url }).eq('id', app.id).then(() => load());
+                        }}
+                      />
+                      {/* Add plan */}
                       <button
                         onClick={() => setPlanFor(planFor === app.id ? null : app.id)}
                         className="text-xs px-3 py-1.5 rounded-lg bg-surface-container-high text-on-surface border border-outline-variant/30 hover:border-primary transition-colors flex items-center gap-1"
                       >
                         <Plus size={12} /> Plan
                       </button>
+                      {/* Toggle active */}
                       <button
                         onClick={() => patchApp(app.id, { is_active: !app.is_active })}
                         className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${app.is_active ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-surface-container-high text-on-surface-variant border border-outline-variant/30'}`}
                       >
                         {app.is_active && <Check size={14} />}
+                      </button>
+                      {/* Delete app */}
+                      <button
+                        onClick={() => delApp(app.id)}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-50 text-red-500 border border-red-200 hover:bg-red-100 transition-colors"
+                        title="Hapus aplikasi"
+                      >
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>
