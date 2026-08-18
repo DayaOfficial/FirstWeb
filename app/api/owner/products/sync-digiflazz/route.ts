@@ -56,6 +56,22 @@ export async function POST() {
     const rawItems = await fetchPriceList('prepaid');
     // Double guard: pastikan array, mencegah "e is not iterable"
     const items = Array.isArray(rawItems) ? rawItems : [];
+
+    // ⚠️ JANGAN anggap sukses bila data kosong — tampilkan pesan asli
+    if (items.length === 0) {
+      await serviceSupabase.from('sync_logs').insert({
+        provider: 'digiflazz',
+        action: 'price_list_sync',
+        total_items: 0,
+        status: 'error',
+        error_message: 'Digiflazz mengembalikan 0 produk. Kemungkinan kredensial salah atau akun belum aktif.',
+      });
+      return NextResponse.json({
+        error: 'Digiflazz tidak mengembalikan produk. Pastikan username & API key benar. Gunakan "Uji Koneksi" di halaman Koneksi API untuk melihat respons asli.',
+        synced: 0,
+      }, { status: 400 });
+    }
+
     let saved = 0;
     let errors = 0;
 

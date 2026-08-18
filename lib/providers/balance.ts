@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { getDigiflazz, getJoker, fetchJson } from '@/lib/server-config';
+import { postForm } from '@/lib/joker';
 
 /**
  * Cek saldo deposit Digiflazz
@@ -46,6 +47,7 @@ export async function getDigiflazzBalance() {
 
 /**
  * Cek saldo JokerPanel
+ * Uses form-urlencoded (not JSON) because SMM panels expect $_POST.
  * Reads credentials from Supabase settings (fallback: process.env)
  */
 export async function getJokerPanelBalance() {
@@ -61,15 +63,20 @@ export async function getJokerPanelBalance() {
   }
 
   try {
-    const json = await fetchJson(cfg.base, {
-      key: cfg.key,
-      action: 'balance',
-    });
+    const r = await postForm(cfg.base, { key: cfg.key, action: 'balance' });
+    if (r.json === null) {
+      return {
+        provider: 'jokerpanel' as const,
+        balance: 0,
+        currency: 'USD',
+        error: `Respons bukan JSON dari ${cfg.base} (status ${r.status}). Jalankan "Deteksi Endpoint" di Koneksi API.`,
+      };
+    }
     return {
       provider: 'jokerpanel' as const,
-      balance: Number(json.balance ?? 0),
-      currency: json.currency ?? 'USD',
-      raw: json,
+      balance: Number(r.json.balance ?? 0),
+      currency: r.json.currency ?? 'USD',
+      raw: r.json,
     };
   } catch (err: any) {
     return {

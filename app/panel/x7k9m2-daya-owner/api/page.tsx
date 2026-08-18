@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Link2, CheckCircle2, AlertCircle, Settings, X, Save, Eye, EyeOff, Loader2, Upload } from 'lucide-react';
+import { Link2, CheckCircle2, AlertCircle, Settings, X, Save, Eye, EyeOff, Loader2, Upload, Zap, Search } from 'lucide-react';
 
 interface ProviderConfig {
   [key: string]: string;
@@ -82,11 +82,51 @@ export default function OwnerApiPage() {
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [migrating, setMigrating] = useState(false);
   const [migrateMsg, setMigrateMsg] = useState('');
+  const [testResult, setTestResult] = useState<{ provider: string; msg: string; ok: boolean } | null>(null);
+  const [testing, setTesting] = useState<string | null>(null);
   const [configs, setConfigs] = useState<Record<string, ProviderConfig>>({
     digiflazz: { username: '', apiKey: '', nomorTujuan: '', kodeProduk: '' },
     jokerpanel: { baseUrl: 'https://jokerpanel.com/api/v2', apiKey: '' },
     pakasir: { slug: '', apiKey: '' },
   });
+
+  // Test Digiflazz connection
+  const handleTestDigiflazz = async () => {
+    setTesting('digiflazz');
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/owner/digiflazz/test', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        setTestResult({ provider: 'digiflazz', msg: `✅ Terhubung! Saldo: Rp ${Number(data.balance).toLocaleString('id-ID')}`, ok: true });
+      } else {
+        setTestResult({ provider: 'digiflazz', msg: `❌ ${data.error}`, ok: false });
+      }
+    } catch {
+      setTestResult({ provider: 'digiflazz', msg: '❌ Kesalahan jaringan', ok: false });
+    }
+    setTesting(null);
+  };
+
+  // Detect JokerPanel endpoint
+  const handleDetectJoker = async () => {
+    setTesting('jokerpanel');
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/owner/joker/detect', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        setTestResult({ provider: 'jokerpanel', msg: `✅ Endpoint ditemukan: ${data.url} — Saldo: $${Number(data.balance).toFixed(2)}`, ok: true });
+        // Update baseUrl in form
+        setConfigs(prev => ({ ...prev, jokerpanel: { ...prev.jokerpanel, baseUrl: data.url } }));
+      } else {
+        setTestResult({ provider: 'jokerpanel', msg: `❌ ${data.error}`, ok: false });
+      }
+    } catch {
+      setTestResult({ provider: 'jokerpanel', msg: '❌ Kesalahan jaringan', ok: false });
+    }
+    setTesting(null);
+  };
 
   // Load saved configs from Supabase settings table
   useEffect(() => {
@@ -313,12 +353,39 @@ export default function OwnerApiPage() {
                         </div>
                       ))}
                     </div>
-                    <button
-                      onClick={() => setEditing(p.id)}
-                      className="mt-4 w-full py-2.5 rounded-lg border border-outline-variant text-sm font-semibold text-on-surface-variant hover:border-primary hover:text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <Settings size={14} /> Konfigurasi
-                    </button>
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={() => setEditing(p.id)}
+                        className="flex-1 py-2.5 rounded-lg border border-outline-variant text-sm font-semibold text-on-surface-variant hover:border-primary hover:text-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Settings size={14} /> Konfigurasi
+                      </button>
+                      {p.id === 'digiflazz' && connected && (
+                        <button
+                          onClick={handleTestDigiflazz}
+                          disabled={testing === 'digiflazz'}
+                          className="px-4 py-2.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {testing === 'digiflazz' ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                          Uji
+                        </button>
+                      )}
+                      {p.id === 'jokerpanel' && connected && (
+                        <button
+                          onClick={handleDetectJoker}
+                          disabled={testing === 'jokerpanel'}
+                          className="px-4 py-2.5 rounded-lg border border-purple-200 bg-purple-50 text-purple-700 text-sm font-semibold hover:bg-purple-100 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {testing === 'jokerpanel' ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                          Deteksi
+                        </button>
+                      )}
+                    </div>
+                    {testResult && testResult.provider === p.id && (
+                      <div className={`mt-3 p-3 rounded-xl text-xs font-medium animate-fade-in ${testResult.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                        {testResult.msg}
+                      </div>
+                    )}
                   </>
                 )}
 
