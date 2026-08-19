@@ -1,5 +1,5 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-import { fetchPriceList } from '@/lib/providers/digiflazz';
+import { fetchPriceList, type DigiflazzProduct } from '@/lib/providers/digiflazz';
 import { NextResponse } from 'next/server';
 
 // Mapping brand Digiflazz → game_key di game_input_templates
@@ -53,37 +53,79 @@ export async function POST() {
   const serviceSupabase = createServiceClient();
 
   try {
-    const rawItems = await fetchPriceList('prepaid');
-    // Double guard: pastikan array, mencegah "e is not iterable"
-    const items = Array.isArray(rawItems) ? rawItems : [];
+    // === PREPAID ===
+    const rawPrepaid = await fetchPriceList('prepaid');
+    const prepaidItems = Array.isArray(rawPrepaid) ? rawPrepaid : [];
 
-    // ⚠️ JANGAN anggap sukses bila data kosong — tampilkan pesan asli
-    if (items.length === 0) {
+    // === PASCA (Tagihan: PLN postpaid, PDAM, BPJS, dll) ===
+    let pascaItems: DigiflazzProduct[] = [];
+    try {
+      const rawPasca = await fetchPriceList('pasca');
+      pascaItems = Array.isArray(rawPasca) ? rawPasca : [];
+    } catch {
+      // Pasca gagal tidak fatal — lanjutkan dengan prepaid saja
+      console.warn('[sync-digiflazz] pasca fetch failed, skipping');
+    }
+
+    // Jika KEDUA-nya kosong, kemungkinan credential salah
+    if (prepaidItems.length === 0 && pascaItems.length === 0) {
       await serviceSupabase.from('sync_logs').insert({
         provider: 'digiflazz',
         action: 'price_list_sync',
         total_items: 0,
         status: 'error',
-        error_message: 'Digiflazz mengembalikan 0 produk. Kemungkinan kredensial salah atau akun belum aktif.',
+        error_message: 'Digiflazz mengembalikan 0 produk (prepaid + pasca). Kemungkinan kredensial salah atau akun belum aktif.',
       });
       return NextResponse.json({
-        error: 'Digiflazz tidak mengembalikan produk. Pastikan username & API key benar. Gunakan "Uji Koneksi" di halaman Koneksi API untuk melihat respons asli.',
+        error: 'Digiflazz tidak mengembalikan produk. Pastikan username & API key benar. Produk yang tersedia = yang aktif di akun Digiflazz Anda. Aktifkan lebih banyak di dashboard Digiflazz, lalu sinkron ulang.',
         synced: 0,
+        prepaid: 0,
+        pasca: 0,
       }, { status: 400 });
     }
 
     let saved = 0;
     let errors = 0;
 
-    for (const item of items) {
-      if (!item.buyer_product_status) continue; // skip produk tidak aktif di Digiflazz
+    // Helper: upsert satu produk
+    async function upsertProduct(row: Record<string, unknown>, providerCode: string, defaultMarkup: number) {
+      const { data: existing } = await serviceSupabase
+        .from('products')
+        .select('id, price_sell, is_active, image_url, profit_type, profit_value')
+        .eq('provider_code', providerCode)
+        .single();
+
+      if (existing) {
+        const { error: upErr } = await serviceSupabase
+          .from('products')
+          .update({
+            ...row,
+            price_sell: existing.price_sell,
+            is_active: existing.is_active,
+            image_url: existing.image_url,
+            profit_type: existing.profit_type,
+            profit_value: existing.profit_value,
+          })
+          .eq('id', existing.id);
+        if (upErr) { errors++; } else { saved++; }
+      } else {
+        const { error: insErr } = await serviceSupabase
+          .from('products')
+          .insert({ ...row, price_sell: defaultMarkup, is_active: false });
+        if (insErr) { errors++; } else { saved++; }
+      }
+    }
+
+    // --- Sync prepaid ---
+    for (const item of prepaidItems) {
+      if (!item.buyer_product_status) continue;
 
       const brandUpper = (item.brand ?? '').toUpperCase();
       const gameKey = BRAND_TO_GAMEKEY[brandUpper] ?? null;
       const category = mapCategory(item.category);
       const isGame = category === 'Game';
 
-      const row = {
+      await upsertProduct({
         module: 'digiflazz',
         provider_code: item.buyer_sku_code,
         name: item.product_name,
@@ -94,52 +136,25 @@ export async function POST() {
         game_slug: isGame ? slug(item.brand) : null,
         game_name: isGame ? item.brand : null,
         stock: item.unlimited_stock ? -1 : item.stock,
-      };
+      }, item.buyer_sku_code, Math.round(item.price * 1.15));
+    }
 
-      // Cek existing by provider_code, lalu insert ATAU update
-      const { data: existing } = await serviceSupabase
-        .from('products')
-        .select('id, price_sell, is_active, image_url, profit_type, profit_value')
-        .eq('provider_code', item.buyer_sku_code)
-        .single();
+    // --- Sync pasca (tagihan) ---
+    for (const item of pascaItems) {
+      if (!item.buyer_product_status) continue;
 
-      if (existing) {
-        // Update: PERTAHANKAN price_sell, is_active, image_url yang sudah di-set owner
-        const { error: upErr } = await serviceSupabase
-          .from('products')
-          .update({
-            ...row,
-            price_sell: existing.price_sell, // owner's price preserved
-            is_active: existing.is_active,   // owner's toggle preserved
-            image_url: existing.image_url,   // owner's image preserved
-            profit_type: existing.profit_type,
-            profit_value: existing.profit_value,
-          })
-          .eq('id', existing.id);
+      const category = mapCategory(item.category) || 'Tagihan';
+      const adminFee = Number(item.price) || 0;
 
-        if (upErr) {
-          console.error(`[sync-digiflazz] update error for ${item.buyer_sku_code}:`, upErr.message);
-          errors++;
-        } else {
-          saved++;
-        }
-      } else {
-        // Insert: baru → default markup 15%, is_active=false (owner aktifkan manual)
-        const { error: insErr } = await serviceSupabase
-          .from('products')
-          .insert({
-            ...row,
-            price_sell: Math.round(item.price * 1.15),
-            is_active: false,
-          });
-
-        if (insErr) {
-          console.error(`[sync-digiflazz] insert error for ${item.buyer_sku_code}:`, insErr.message);
-          errors++;
-        } else {
-          saved++;
-        }
-      }
+      await upsertProduct({
+        module: 'digiflazz',
+        provider_code: item.buyer_sku_code,
+        name: item.product_name,
+        brand: item.brand,
+        category,
+        price_modal: adminFee,
+        stock: 9999,
+      }, item.buyer_sku_code, adminFee + 2500);
     }
 
     // Log sync
@@ -151,7 +166,15 @@ export async function POST() {
       error_message: errors > 0 ? `${errors} item gagal` : null,
     });
 
-    return NextResponse.json({ synced: saved, errors });
+    return NextResponse.json({
+      synced: saved,
+      errors,
+      prepaid: prepaidItems.length,
+      pasca: pascaItems.length,
+      hint: prepaidItems.length < 20
+        ? 'Produk yang tersedia = yang aktif di akun Digiflazz Anda. Aktifkan lebih banyak di dashboard Digiflazz, lalu sinkron ulang.'
+        : undefined,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('[sync-digiflazz] fatal:', message);

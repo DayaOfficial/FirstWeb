@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Plus, Minus, Bot, Check, Trash2, Package } from 'lucide-react';
+import { ImagePicker } from '@/components/ui/ImagePicker';
 
 interface RobuxProduct {
   id: string;
@@ -10,6 +11,7 @@ interface RobuxProduct {
   price_sell: number;
   stock: number;
   is_active: boolean;
+  image_url: string | null;
 }
 
 export default function RobuxVilogPage() {
@@ -117,8 +119,14 @@ export default function RobuxVilogPage() {
         {rows.map(r => (
           <div key={r.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-surface-container-lowest border border-outline-variant/20 shadow-soft px-5 py-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-sm">
-                R
+              <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0">
+                <ImagePicker
+                  current={r.image_url}
+                  size={40}
+                  onSaved={url => {
+                    sb.from('products').update({ image_url: url }).eq('id', r.id).then(() => load());
+                  }}
+                />
               </div>
               <div>
                 <p className="text-sm font-bold text-on-surface">{r.name}</p>
