@@ -14,11 +14,11 @@ interface GameRow {
 export default async function TopUpGamePage() {
   const supabase = await createClient();
 
-  // Ambil game unik dari DB — hanya yang aktif (Digiflazz)
+  // Ambil game unik dari DB — toleran: module=digiflazz ATAU category=Game
   const { data: products } = await supabase
     .from('products')
-    .select('game_name, game_slug, image_url, brand')
-    .eq('module', 'digiflazz')
+    .select('game_name, game_slug, image_url, brand, module')
+    .or('module.eq.digiflazz,category.ilike.%game%')
     .eq('is_active', true)
     .not('game_slug', 'is', null)
     .not('game_name', 'is', null);

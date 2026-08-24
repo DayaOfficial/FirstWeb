@@ -42,7 +42,7 @@ export async function POST(req: Request) {
   if (product_id && !product_id.startsWith('fallback-')) {
     const { data: product } = await serviceSupabase
       .from('products')
-      .select('name, module, buyer_sku_code, provider_service_id')
+      .select('name, module, provider_code')
       .eq('id', product_id)
       .single();
 

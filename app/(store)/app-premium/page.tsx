@@ -15,11 +15,11 @@ interface PlanRow {
 export default async function AppPremiumPage() {
   const supabase = await createClient();
 
-  // Ambil produk app premium (manual_app module)
+  // Ambil produk app premium — toleran: module=manual_app ATAU category=app_premium
   const { data: products } = await supabase
     .from('products')
     .select('id, name, image_url, description, price_sell, brand')
-    .eq('module', 'manual_app')
+    .or('module.eq.manual_app,category.eq.app_premium')
     .eq('is_active', true)
     .order('sort_order', { ascending: true });
 

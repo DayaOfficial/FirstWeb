@@ -8,7 +8,7 @@ export default async function PulsaDataPage() {
 
   const { data: products } = await supabase
     .from('products')
-    .select('id, name, brand, price_sell, buyer_sku_code')
+    .select('id, name, brand, price_sell, provider_code')
     .eq('module', 'digiflazz')
     .in('category', ['Pulsa', 'Data'])
     .eq('is_active', true)
@@ -26,7 +26,7 @@ export default async function PulsaDataPage() {
         name: p.name,
         brand: p.brand ?? '',
         price_sell: Number(p.price_sell),
-        buyer_sku_code: p.buyer_sku_code ?? '',
+        buyer_sku_code: p.provider_code ?? '',
       }))}
       category="Pulsa & Data"
       showBrandFilter={true}

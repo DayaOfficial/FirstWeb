@@ -1,14 +1,21 @@
-import { createClient } from '@/lib/supabase/server';
-import { createServiceClient } from '@/lib/supabase/server';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { getJoker } from '@/lib/server-config';
 import { jokerServices } from '@/lib/joker';
+
+export const maxDuration = 60;
 
 const PLATFORM_KEYWORDS = [
   'instagram', 'tiktok', 'youtube', 'facebook', 'twitter',
   'telegram', 'spotify', 'threads', 'shopee', 'snackvideo',
   'linkedin', 'twitch', 'discord', 'pinterest',
 ];
+
+function platformOf(name: string, category: string): string {
+  const lower = `${name} ${category}`.toLowerCase();
+  const found = PLATFORM_KEYWORDS.find(k => lower.includes(k));
+  return found ? found.charAt(0).toUpperCase() + found.slice(1) : 'Lainnya';
+}
 
 export async function POST() {
   // Auth check: hanya owner
@@ -27,9 +34,10 @@ export async function POST() {
     }, { status: 400 });
   }
 
-  const serviceSupabase = createServiceClient();
+  const sb = createServiceClient();
 
   try {
+    // === 1 API call: ambil semua services ===
     const json = await jokerServices(cfg);
     const services = Array.isArray(json.services) ? json.services : (Array.isArray(json) ? json : []);
 
@@ -40,66 +48,110 @@ export async function POST() {
       }, { status: 400 });
     }
 
-    let saved = 0;
-
+    // === Build rows dari API response ===
+    const allRows: Record<string, unknown>[] = [];
     for (const s of services) {
-      const nameLower = (s.name ?? '').toLowerCase();
-      const categoryLower = (s.category ?? '').toLowerCase();
-      const platform = PLATFORM_KEYWORDS.find(k =>
-        nameLower.includes(k) || categoryLower.includes(k)
-      ) ?? 'Lainnya';
-
-      const row = {
+      const platform = platformOf(s.name ?? '', s.category ?? '');
+      allRows.push({
         module: 'jokerpanel',
         provider_code: String(s.id),
         name: s.name,
-        brand: platform.charAt(0).toUpperCase() + platform.slice(1),
+        brand: platform,
         category: 'SMM',
         service_type: s.type || null,
         description: s.description || null,
         min_qty: Number(s.min) || 10,
         max_qty: Number(s.max) || 100000,
         price_modal: Number(s.price),
-        price_sell: Math.round(Number(s.price) * 1.3), // default 30% markup
+        price_sell: Math.round(Number(s.price) * 1.3),
         synced_at: new Date().toISOString(),
-      };
-
-      // Upsert: preserve owner's price_sell, is_active, image_url if already exists
-      const { data: existing } = await serviceSupabase
-        .from('products')
-        .select('id, price_sell, is_active, image_url')
-        .eq('provider_code', String(s.id))
-        .eq('module', 'jokerpanel')
-        .single();
-
-      if (existing) {
-        await serviceSupabase.from('products').update({
-          ...row,
-          price_sell: existing.price_sell, // keep owner's price
-          is_active: existing.is_active,   // keep owner's toggle
-          image_url: existing.image_url,   // keep owner's image
-        }).eq('id', existing.id);
-      } else {
-        await serviceSupabase.from('products').insert({
-          ...row,
-          is_active: false, // owner aktifkan manual
-        });
-      }
-      saved++;
+      });
     }
 
-    await serviceSupabase.from('sync_logs').insert({
+    // === 1 query: ambil semua existing jokerpanel products ===
+    const { data: existing } = await sb
+      .from('products')
+      .select('id, provider_code, price_modal')
+      .eq('module', 'jokerpanel');
+
+    const existingMap = new Map(
+      (existing || []).map((r: Record<string, unknown>) => [r.provider_code as string, r])
+    );
+
+    // === Split: insert vs update ===
+    const toInsert: Record<string, unknown>[] = [];
+    const toUpdate: { id: string; updates: Record<string, unknown> }[] = [];
+
+    for (const row of allRows) {
+      const ex = existingMap.get(row.provider_code as string) as Record<string, unknown> | undefined;
+      if (!ex) {
+        toInsert.push({ ...row, is_active: false });
+      } else if (Number(ex.price_modal) !== Number(row.price_modal)) {
+        toUpdate.push({
+          id: ex.id as string,
+          updates: {
+            name: row.name,
+            brand: row.brand,
+            service_type: row.service_type,
+            description: row.description,
+            min_qty: row.min_qty,
+            max_qty: row.max_qty,
+            price_modal: row.price_modal,
+            synced_at: row.synced_at,
+            // PRESERVE: price_sell, is_active, image_url
+          },
+        });
+      }
+    }
+
+    // === Batch insert (500 per batch) ===
+    let insertErrors = 0;
+    for (let i = 0; i < toInsert.length; i += 500) {
+      const batch = toInsert.slice(i, i + 500);
+      const { error } = await sb.from('products').insert(batch);
+      if (error) {
+        console.error('[sync-jokerpanel] batch insert error:', error.message);
+        insertErrors++;
+      }
+    }
+
+    // === Parallel updates (batches of 50) ===
+    let updateErrors = 0;
+    const updateBatches = [];
+    for (let i = 0; i < toUpdate.length; i += 50) {
+      const batch = toUpdate.slice(i, i + 50);
+      updateBatches.push(
+        Promise.all(
+          batch.map(u =>
+            sb.from('products').update(u.updates).eq('id', u.id)
+              .then(({ error }: { error: unknown }) => { if (error) updateErrors++; })
+          )
+        )
+      );
+    }
+    await Promise.all(updateBatches);
+
+    // === Log ===
+    const totalErrors = insertErrors + updateErrors;
+    await sb.from('sync_logs').insert({
       provider: 'jokerpanel',
       action: 'services_sync',
-      total_items: saved,
-      status: 'success',
+      total_items: allRows.length,
+      status: totalErrors > 0 ? 'partial' : 'success',
+      error_message: totalErrors > 0 ? `${totalErrors} batch gagal` : null,
     });
 
-    return NextResponse.json({ synced: saved });
+    return NextResponse.json({
+      synced: allRows.length,
+      inserted: toInsert.length,
+      updated: toUpdate.length,
+      unchanged: allRows.length - toInsert.length - toUpdate.length,
+      errors: totalErrors,
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
 
-    await serviceSupabase.from('sync_logs').insert({
+    await sb.from('sync_logs').insert({
       provider: 'jokerpanel',
       action: 'services_sync',
       total_items: 0,

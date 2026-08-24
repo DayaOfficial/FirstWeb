@@ -2,7 +2,9 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { fetchPriceList, type DigiflazzProduct } from '@/lib/providers/digiflazz';
 import { NextResponse } from 'next/server';
 
-// Mapping brand Digiflazz → game_key di game_input_templates
+export const maxDuration = 60;
+
+// Mapping brand Digiflazz ke game_key di game_input_templates
 const BRAND_TO_GAMEKEY: Record<string, string> = {
   'FREE FIRE': 'free_fire',
   'MOBILE LEGENDS': 'mobile_legends',
@@ -26,7 +28,7 @@ const BRAND_TO_GAMEKEY: Record<string, string> = {
   'STEAM': 'steam_wallet',
 };
 
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+const slug = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
 
 function mapCategory(cat: string): string {
   const c = (cat ?? '').toLowerCase();
@@ -50,127 +52,158 @@ export async function POST() {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  const serviceSupabase = createServiceClient();
+  const sb = createServiceClient();
 
   try {
-    // === PREPAID ===
+    // === Fetch prepaid + pasca dari API (2 calls) ===
     const rawPrepaid = await fetchPriceList('prepaid');
     const prepaidItems = Array.isArray(rawPrepaid) ? rawPrepaid : [];
 
-    // === PASCA (Tagihan: PLN postpaid, PDAM, BPJS, dll) ===
     let pascaItems: DigiflazzProduct[] = [];
     try {
       const rawPasca = await fetchPriceList('pasca');
       pascaItems = Array.isArray(rawPasca) ? rawPasca : [];
     } catch {
-      // Pasca gagal tidak fatal — lanjutkan dengan prepaid saja
       console.warn('[sync-digiflazz] pasca fetch failed, skipping');
     }
 
-    // Jika KEDUA-nya kosong, kemungkinan credential salah
     if (prepaidItems.length === 0 && pascaItems.length === 0) {
-      await serviceSupabase.from('sync_logs').insert({
-        provider: 'digiflazz',
-        action: 'price_list_sync',
-        total_items: 0,
-        status: 'error',
-        error_message: 'Digiflazz mengembalikan 0 produk (prepaid + pasca). Kemungkinan kredensial salah atau akun belum aktif.',
-      });
       return NextResponse.json({
-        error: 'Digiflazz tidak mengembalikan produk. Pastikan username & API key benar. Produk yang tersedia = yang aktif di akun Digiflazz Anda. Aktifkan lebih banyak di dashboard Digiflazz, lalu sinkron ulang.',
-        synced: 0,
-        prepaid: 0,
-        pasca: 0,
+        error: 'Digiflazz mengembalikan 0 produk. Buka Diagnostik Raw untuk bukti. Aktifkan produk di dashboard Digiflazz.',
+        synced: 0, prepaid: 0, pasca: 0,
       }, { status: 400 });
     }
 
-    let saved = 0;
-    let errors = 0;
+    // === Build rows dari API response ===
+    const allRows: Record<string, unknown>[] = [];
 
-    // Helper: upsert satu produk
-    async function upsertProduct(row: Record<string, unknown>, providerCode: string, defaultMarkup: number) {
-      const { data: existing } = await serviceSupabase
-        .from('products')
-        .select('id, price_sell, is_active, image_url, profit_type, profit_value')
-        .eq('provider_code', providerCode)
-        .single();
-
-      if (existing) {
-        const { error: upErr } = await serviceSupabase
-          .from('products')
-          .update({
-            ...row,
-            price_sell: existing.price_sell,
-            is_active: existing.is_active,
-            image_url: existing.image_url,
-            profit_type: existing.profit_type,
-            profit_value: existing.profit_value,
-          })
-          .eq('id', existing.id);
-        if (upErr) { errors++; } else { saved++; }
-      } else {
-        const { error: insErr } = await serviceSupabase
-          .from('products')
-          .insert({ ...row, price_sell: defaultMarkup, is_active: false });
-        if (insErr) { errors++; } else { saved++; }
-      }
-    }
-
-    // --- Sync prepaid ---
     for (const item of prepaidItems) {
       if (!item.buyer_product_status) continue;
-
       const brandUpper = (item.brand ?? '').toUpperCase();
       const gameKey = BRAND_TO_GAMEKEY[brandUpper] ?? null;
       const category = mapCategory(item.category);
       const isGame = category === 'Game';
 
-      await upsertProduct({
+      allRows.push({
         module: 'digiflazz',
         provider_code: item.buyer_sku_code,
         name: item.product_name,
         brand: item.brand,
         category,
         price_modal: item.price,
+        price_sell: Math.round(item.price * 1.15),
         game_key: gameKey,
         game_slug: isGame ? slug(item.brand) : null,
         game_name: isGame ? item.brand : null,
-        stock: item.unlimited_stock ? -1 : item.stock,
-      }, item.buyer_sku_code, Math.round(item.price * 1.15));
+        stock: item.unlimited_stock ? 9999 : (item.stock || 0),
+        synced_at: new Date().toISOString(),
+      });
     }
 
-    // --- Sync pasca (tagihan) ---
     for (const item of pascaItems) {
       if (!item.buyer_product_status) continue;
-
       const category = mapCategory(item.category) || 'Tagihan';
       const adminFee = Number(item.price) || 0;
 
-      await upsertProduct({
+      allRows.push({
         module: 'digiflazz',
         provider_code: item.buyer_sku_code,
         name: item.product_name,
         brand: item.brand,
         category,
         price_modal: adminFee,
+        price_sell: adminFee + 2500,
         stock: 9999,
-      }, item.buyer_sku_code, adminFee + 2500);
+        synced_at: new Date().toISOString(),
+      });
     }
 
-    // Log sync
-    await serviceSupabase.from('sync_logs').insert({
+    // === 1 query: ambil semua existing digiflazz products ===
+    const { data: existing } = await sb
+      .from('products')
+      .select('id, provider_code, price_modal, price_sell, is_active, image_url, profit_type, profit_value')
+      .eq('module', 'digiflazz');
+
+    const existingMap = new Map(
+      (existing || []).map((r: Record<string, unknown>) => [r.provider_code as string, r])
+    );
+
+    // === Split: insert baru vs update yang berubah ===
+    const toInsert: Record<string, unknown>[] = [];
+    const toUpdate: { id: string; updates: Record<string, unknown> }[] = [];
+
+    for (const row of allRows) {
+      const ex = existingMap.get(row.provider_code as string) as Record<string, unknown> | undefined;
+      if (!ex) {
+        // Produk baru: default is_active=false (owner aktifkan manual)
+        toInsert.push({ ...row, is_active: false });
+      } else {
+        // Existing: hanya update jika price_modal berubah, PERTAHANKAN owner overrides
+        if (Number(ex.price_modal) !== Number(row.price_modal)) {
+          toUpdate.push({
+            id: ex.id as string,
+            updates: {
+              name: row.name,
+              brand: row.brand,
+              category: row.category,
+              price_modal: row.price_modal,
+              stock: row.stock,
+              game_key: row.game_key,
+              game_slug: row.game_slug,
+              game_name: row.game_name,
+              synced_at: row.synced_at,
+              // PRESERVE: price_sell, is_active, image_url, profit_type, profit_value
+            },
+          });
+        }
+      }
+    }
+
+    // === Batch insert (500 per batch) ===
+    let insertErrors = 0;
+    for (let i = 0; i < toInsert.length; i += 500) {
+      const batch = toInsert.slice(i, i + 500);
+      const { error } = await sb.from('products').insert(batch);
+      if (error) {
+        console.error('[sync-digiflazz] batch insert error:', error.message);
+        insertErrors++;
+      }
+    }
+
+    // === Parallel updates ===
+    let updateErrors = 0;
+    const updateBatches = [];
+    for (let i = 0; i < toUpdate.length; i += 50) {
+      const batch = toUpdate.slice(i, i + 50);
+      updateBatches.push(
+        Promise.all(
+          batch.map(u =>
+            sb.from('products').update(u.updates).eq('id', u.id)
+              .then(({ error }: { error: unknown }) => { if (error) updateErrors++; })
+          )
+        )
+      );
+    }
+    await Promise.all(updateBatches);
+
+    // === Log sync ===
+    const totalErrors = insertErrors + updateErrors;
+    await sb.from('sync_logs').insert({
       provider: 'digiflazz',
       action: 'price_list_sync',
-      total_items: saved,
-      status: errors > 0 ? 'partial' : 'success',
-      error_message: errors > 0 ? `${errors} item gagal` : null,
+      total_items: allRows.length,
+      status: totalErrors > 0 ? 'partial' : 'success',
+      error_message: totalErrors > 0 ? `${totalErrors} batch gagal` : null,
     });
 
     return NextResponse.json({
-      synced: saved,
-      errors,
+      synced: allRows.length,
+      inserted: toInsert.length,
+      updated: toUpdate.length,
+      unchanged: allRows.length - toInsert.length - toUpdate.length,
       prepaid: prepaidItems.length,
       pasca: pascaItems.length,
+      errors: totalErrors,
       hint: prepaidItems.length < 20
         ? 'Produk yang tersedia = yang aktif di akun Digiflazz Anda. Aktifkan lebih banyak di dashboard Digiflazz, lalu sinkron ulang.'
         : undefined,
@@ -179,7 +212,7 @@ export async function POST() {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error('[sync-digiflazz] fatal:', message);
 
-    await serviceSupabase.from('sync_logs').insert({
+    await sb.from('sync_logs').insert({
       provider: 'digiflazz',
       action: 'price_list_sync',
       total_items: 0,
