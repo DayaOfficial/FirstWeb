@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useCheckout } from '@/hooks/use-checkout';
 import ConfirmationStep from '@/components/checkout/confirmation-step';
 import PaymentStep from '@/components/checkout/payment-step';
@@ -13,18 +13,12 @@ interface SMMService {
   id: string;
   name: string;
   platform: string;
+  smm_category: string;
   price_per_k: number;
   provider_service_id: string;
   description: string;
   min_qty: number;
   max_qty: number;
-}
-
-// Detect service type from name
-const TYPES = ['Followers', 'Likes', 'Views', 'Comments', 'Shares', 'Subscribers', 'Members', 'Plays'];
-function typeOf(name: string): string {
-  const lower = name.toLowerCase();
-  return TYPES.find(t => lower.includes(t.toLowerCase())) || 'Lainnya';
 }
 
 function StepTitle({ n, title }: { n: number; title: string }) {
@@ -44,7 +38,7 @@ export default function SMMPanelPage() {
   const [loading, setLoading] = useState(true);
 
   const [selectedPlatform, setSelectedPlatform] = useState('');
-  const [selectedType, setSelectedType] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedService, setSelectedService] = useState<SMMService | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [targetLink, setTargetLink] = useState('');
@@ -55,7 +49,7 @@ export default function SMMPanelPage() {
     (async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price_sell, provider_code, description, min_qty, max_qty')
+        .select('id, name, brand, price_sell, provider_code, description, min_qty, max_qty, smm_category')
         .eq('module', 'jokerpanel')
         .eq('is_active', true)
         .order('brand', { ascending: true });
@@ -68,6 +62,7 @@ export default function SMMPanelPage() {
         id: p.id,
         name: p.name,
         platform: p.brand ?? 'Lainnya',
+        smm_category: p.smm_category ?? '',
         price_per_k: Number(p.price_sell),
         provider_service_id: p.provider_code ?? '',
         description: p.description ?? '',
@@ -79,20 +74,27 @@ export default function SMMPanelPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const platforms = [...new Set(services.map(s => s.platform))];
+  const platforms = useMemo(() => [...new Set(services.map(s => s.platform))], [services]);
 
-  // Types available for the selected platform
-  const typesForPlatform = [...new Set(
+  // Filter by platform and search
+  const byPlatformAndSearch = useMemo(() =>
     services
       .filter(s => !selectedPlatform || s.platform === selectedPlatform)
-      .map(s => typeOf(s.name))
-  )];
+      .filter(s => !searchQuery || s.name.toLowerCase().includes(searchQuery.toLowerCase())),
+    [services, selectedPlatform, searchQuery]
+  );
 
-  // Filter by platform, type, and search
-  const filtered = services
-    .filter(s => !selectedPlatform || s.platform === selectedPlatform)
-    .filter(s => !selectedType || typeOf(s.name) === selectedType)
-    .filter(s => !searchQuery || s.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Categories for current platform (from smm_category)
+  const categories = useMemo(() =>
+    [...new Set(byPlatformAndSearch.map(s => s.smm_category).filter(Boolean))],
+    [byPlatformAndSearch]
+  );
+
+  // Final filtered services
+  const filtered = useMemo(() =>
+    byPlatformAndSearch.filter(s => !selectedCategory || s.smm_category === selectedCategory),
+    [byPlatformAndSearch, selectedCategory]
+  );
 
   const totalPrice = selectedService ? Math.round((selectedService.price_per_k / 1000) * quantity) : 0;
 
@@ -121,12 +123,12 @@ export default function SMMPanelPage() {
       {step === 'service' && (
         <section className="space-y-4">
           <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 shadow-soft">
-            <StepTitle n={1} title="Pilih Aplikasi" />
+            <StepTitle n={1} title="Platform Layanan" />
 
-            {/* Platform tabs */}
+            {/* Platform chips */}
             <div className="flex flex-wrap gap-2 mb-4">
               <button
-                onClick={() => { setSelectedPlatform(''); setSelectedType(''); setSelectedService(null); }}
+                onClick={() => { setSelectedPlatform(''); setSelectedCategory(''); setSelectedService(null); }}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                   !selectedPlatform ? 'bg-primary text-white' : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
                 }`}
@@ -136,7 +138,7 @@ export default function SMMPanelPage() {
               {platforms.map(p => (
                 <button
                   key={p}
-                  onClick={() => { setSelectedPlatform(p); setSelectedType(''); setSelectedService(null); }}
+                  onClick={() => { setSelectedPlatform(p); setSelectedCategory(''); setSelectedService(null); }}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all capitalize ${
                     selectedPlatform === p ? 'bg-primary text-white' : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
                   }`}
@@ -146,34 +148,6 @@ export default function SMMPanelPage() {
               ))}
             </div>
 
-            {/* Type filter (if platform selected) */}
-            {selectedPlatform && typesForPlatform.length > 1 && (
-              <>
-                <StepTitle n={2} title="Pilih Jenis" />
-                <div className="flex flex-wrap gap-2 mb-4">
-                  <button
-                    onClick={() => { setSelectedType(''); setSelectedService(null); }}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                      !selectedType ? 'bg-primary text-white' : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
-                    }`}
-                  >
-                    Semua
-                  </button>
-                  {typesForPlatform.map(t => (
-                    <button
-                      key={t}
-                      onClick={() => { setSelectedType(t); setSelectedService(null); }}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                        selectedType === t ? 'bg-primary text-white' : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-
             {/* Search */}
             <div className="relative max-w-sm mb-4">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
@@ -182,7 +156,27 @@ export default function SMMPanelPage() {
                 className="w-full pl-9 pr-3 py-2 rounded-xl border border-outline-variant text-xs bg-surface-container-lowest outline-none focus:border-primary" />
             </div>
 
+            {/* Category filter (from smm_category) */}
+            {categories.length > 0 && (
+              <>
+                <StepTitle n={2} title="Kategori" />
+                <div className="mb-4">
+                  <select
+                    value={selectedCategory}
+                    onChange={e => { setSelectedCategory(e.target.value); setSelectedService(null); }}
+                    className="w-full px-3 py-2.5 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                  >
+                    <option value="">Semua Kategori ({byPlatformAndSearch.length})</option>
+                    {categories.map(c => (
+                      <option key={c} value={c}>{c} ({byPlatformAndSearch.filter(s => s.smm_category === c).length})</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
             {/* Service list */}
+            <StepTitle n={categories.length > 0 ? 3 : 2} title="Pilih Layanan" />
             <div className="divide-y divide-outline-variant/30 max-h-[500px] overflow-y-auto rounded-xl border border-outline-variant/30">
               {filtered.map(s => (
                 <button
@@ -195,10 +189,12 @@ export default function SMMPanelPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-on-surface leading-tight">{s.name}</p>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className="text-[10px] bg-surface-container-high px-2 py-0.5 rounded-full text-on-surface-variant font-medium">{s.platform}</span>
-                        <span className="text-[10px] bg-surface-container-high px-2 py-0.5 rounded-full text-on-surface-variant font-medium">{typeOf(s.name)}</span>
-                        {s.description && <span className="text-[10px] text-on-surface-variant truncate">{s.description}</span>}
+                        {s.smm_category && (
+                          <span className="text-[10px] bg-surface-container-high px-2 py-0.5 rounded-full text-on-surface-variant font-medium">{s.smm_category}</span>
+                        )}
+                        <span className="text-[10px] text-on-surface-variant">Min {s.min_qty.toLocaleString('id-ID')} · Max {s.max_qty.toLocaleString('id-ID')}</span>
                       </div>
                     </div>
                     <p className="text-sm font-bold text-primary font-[family-name:var(--font-heading)] shrink-0">
@@ -223,7 +219,7 @@ export default function SMMPanelPage() {
       {/* Step 2: Input Link + Quantity */}
       {step === 'input' && selectedService && (
         <section className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 shadow-soft max-w-lg">
-          <StepTitle n={selectedPlatform && typesForPlatform.length > 1 ? 3 : 2} title="Isi Detail Pesanan" />
+          <StepTitle n={categories.length > 0 ? 4 : 3} title="Isi Detail Pesanan" />
 
           <div className="mb-4 p-3 rounded-xl bg-surface-container-high text-sm">
             <span className="text-on-surface-variant">Layanan: </span>
@@ -231,7 +227,13 @@ export default function SMMPanelPage() {
             <button onClick={() => setStep('service')} className="ml-3 text-primary text-xs font-semibold hover:underline">Ubah</button>
           </div>
 
-          <label className="text-sm font-semibold text-on-surface">Link / Username</label>
+          {selectedService.description && (
+            <div className="mb-4 p-3 rounded-xl bg-surface-container-low text-xs text-on-surface-variant border border-outline-variant/20">
+              {selectedService.description}
+            </div>
+          )}
+
+          <label className="text-sm font-semibold text-on-surface">Link / Username *</label>
           <div className="relative mt-1 mb-3">
             <ExternalLink size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
             <input type="url" value={targetLink} onChange={e => setTargetLink(e.target.value)}
@@ -239,7 +241,7 @@ export default function SMMPanelPage() {
               className="w-full pl-10 pr-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
           </div>
 
-          <label className="text-sm font-semibold text-on-surface">Jumlah</label>
+          <label className="text-sm font-semibold text-on-surface">Jumlah *</label>
           <input type="number" value={quantity}
             onChange={e => setQuantity(Math.min(selectedService.max_qty, Math.max(selectedService.min_qty, Number(e.target.value))))}
             min={selectedService.min_qty} max={selectedService.max_qty} step={100}
@@ -306,7 +308,12 @@ export default function SMMPanelPage() {
                 setStep('confirm');
                 return;
               }
-              go({ orderId: data.orderId, qrisUrl: data.qrisUrl });
+              go({
+                orderId: data.orderId,
+                qrisUrl: data.qrisUrl,
+                qrString: data.qrString,
+                testMode: data.testMode,
+              });
             } catch (err: any) {
               alert('Gagal: Kesalahan jaringan');
               console.error('[SMM] order error:', err);
@@ -322,6 +329,8 @@ export default function SMMPanelPage() {
         <PaymentStep
           orderId={state.orderId}
           qrisUrl={state.qrisUrl}
+          qrString={state.qrString}
+          testMode={state.testMode}
           amount={totalPrice}
           productName={state.nominal?.name || 'SMM'}
         />

@@ -58,6 +58,7 @@ export async function POST() {
         name: s.name,
         brand: platform,
         category: 'SMM',
+        smm_category: s.category || null,  // Kategori asli dari JokerPanel
         service_type: s.type || null,
         description: s.description || null,
         min_qty: Number(s.min) || 10,
@@ -92,6 +93,7 @@ export async function POST() {
           updates: {
             name: row.name,
             brand: row.brand,
+            smm_category: row.smm_category,
             service_type: row.service_type,
             description: row.description,
             min_qty: row.min_qty,
@@ -104,14 +106,16 @@ export async function POST() {
       }
     }
 
-    // === Batch insert (500 per batch) ===
-    let insertErrors = 0;
+    // === Batch insert (500 per batch) — STOP pada error pertama ===
     for (let i = 0; i < toInsert.length; i += 500) {
       const batch = toInsert.slice(i, i + 500);
       const { error } = await sb.from('products').insert(batch);
       if (error) {
         console.error('[sync-jokerpanel] batch insert error:', error.message);
-        insertErrors++;
+        return NextResponse.json({
+          error: 'Insert gagal: ' + error.message,
+          batch: `${i}-${i + batch.length}`,
+        }, { status: 500 });
       }
     }
 
@@ -131,22 +135,27 @@ export async function POST() {
     }
     await Promise.all(updateBatches);
 
+    // === Hitung dari DB setelah insert (count nyata) ===
+    const { count } = await sb
+      .from('products')
+      .select('*', { count: 'exact', head: true })
+      .eq('module', 'jokerpanel');
+
     // === Log ===
-    const totalErrors = insertErrors + updateErrors;
     await sb.from('sync_logs').insert({
       provider: 'jokerpanel',
       action: 'services_sync',
       total_items: allRows.length,
-      status: totalErrors > 0 ? 'partial' : 'success',
-      error_message: totalErrors > 0 ? `${totalErrors} batch gagal` : null,
+      status: updateErrors > 0 ? 'partial' : 'success',
+      error_message: updateErrors > 0 ? `${updateErrors} update gagal` : null,
     });
 
     return NextResponse.json({
-      synced: allRows.length,
+      synced: count ?? 0,
       inserted: toInsert.length,
       updated: toUpdate.length,
       unchanged: allRows.length - toInsert.length - toUpdate.length,
-      errors: totalErrors,
+      errors: updateErrors,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';

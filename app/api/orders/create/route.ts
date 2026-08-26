@@ -1,5 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
-import { createServiceClient } from '@/lib/supabase/server';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { getSettings, getPakasir } from '@/lib/server-config';
 import { NextResponse } from 'next/server';
 import { generateOrderCode } from '@/lib/utils';
 
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
   // Buat order
   const expiresAt = new Date();
-  expiresAt.setMinutes(expiresAt.getMinutes() + 30); // 30 menit untuk bayar
+  expiresAt.setMinutes(expiresAt.getMinutes() + 15); // 15 menit untuk bayar
 
   const { data: order, error } = await serviceSupabase
     .from('orders')
@@ -81,14 +81,56 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Gagal membuat pesanan: ' + error.message }, { status: 500 });
   }
 
-  // TODO: Integrasi Pakasir QRIS — untuk saat ini return placeholder
-  // Ketika Pakasir sudah aktif, generate QRIS di sini dan simpan qris_url + payment_ref
-  const qrisUrl = null; // Placeholder — akan diganti saat Pakasir dikonfigurasi
+  // === Integrasi Pakasir QRIS ===
+  const testSettings = await getSettings(['test_mode']);
+  const testMode = testSettings.test_mode === 'true';
+
+  let qrisUrl: string | null = null;
+  let qrString: string | null = null;
+  let paymentRef: string | null = null;
+
+  if (!testMode) {
+    try {
+      const pk = await getPakasir();
+      if (pk.slug && pk.apiKey) {
+        const pakasirBase = 'https://app.pakasir.com/api';
+        const res = await fetch(pakasirBase + '/transactioncreate/qris', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slug: pk.slug,
+            api_key: pk.apiKey,
+            amount: Number(amount),
+            order_id: orderCode,
+          }),
+        });
+        const qris = await res.json().catch(() => ({}));
+
+        // Toleran field — coba berbagai kemungkinan nama field
+        qrisUrl = qris.qr_url || qris.qr || qris.qris || qris.data?.qr_url || qris.data?.qr || null;
+        qrString = qris.qr_string || qris.data?.qr_string || null;
+        paymentRef = qris.reference || qris.ref || qris.transaction_id || qris.data?.reference || null;
+
+        // Simpan ke order
+        if (qrisUrl || qrString || paymentRef) {
+          await serviceSupabase.from('orders').update({
+            qris_url: qrisUrl,
+            payment_ref: paymentRef,
+          }).eq('id', order.id);
+        }
+      }
+    } catch (err: any) {
+      console.error('[create-order] Pakasir error:', err?.message || err);
+      // Lanjut tanpa QR — tidak gagalkan order
+    }
+  }
 
   return NextResponse.json({
     orderId: order.id,
     orderCode: order.order_code,
     qrisUrl,
+    qrString,
+    testMode,
     amount: Number(amount),
     expiresAt: expiresAt.toISOString(),
   });

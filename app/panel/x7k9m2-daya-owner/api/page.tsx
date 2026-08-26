@@ -50,10 +50,14 @@ const PROVIDERS: ProviderDef[] = [
     settingsMap: {
       apiId: 'jokerpanel_api_id',
       apiKey: 'jokerpanel_api_key',
+      relay: 'jokerpanel_relay',
+      relaySecret: 'jokerpanel_relay_secret',
     },
     fields: [
       { key: 'apiId', label: 'API ID', type: 'text', placeholder: 'Contoh: 11 (angka dari panel JokerPanel)' },
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Masukkan API Key JokerPanel' },
+      { key: 'relay', label: 'Relay URL (Opsional)', type: 'text', placeholder: 'http://IP_VPS:8080', helper: 'URL relay VPS ber-IP statis. Kosongkan untuk koneksi langsung ke JokerPanel.' },
+      { key: 'relaySecret', label: 'Relay Secret (Opsional)', type: 'password', placeholder: 'Secret untuk autentikasi relay', helper: 'Samakan dengan RELAY_SECRET di VPS.' },
     ],
   },
   {
@@ -86,7 +90,7 @@ export default function OwnerApiPage() {
   const [testing, setTesting] = useState<string | null>(null);
   const [configs, setConfigs] = useState<Record<string, ProviderConfig>>({
     digiflazz: { username: '', apiKey: '', nomorTujuan: '', kodeProduk: '' },
-    jokerpanel: { apiId: '', apiKey: '' },
+    jokerpanel: { apiId: '', apiKey: '', relay: '', relaySecret: '' },
     pakasir: { slug: '', apiKey: '' },
   });
 

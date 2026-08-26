@@ -31,6 +31,8 @@ export interface CheckoutState {
   buyerPhone: string;
   orderId: string | null;
   qrisUrl: string | null;
+  qrString: string | null;
+  testMode: boolean;
   error: string | null;
 }
 
@@ -45,6 +47,8 @@ export function useCheckout(product: CheckoutProduct | null) {
     buyerPhone: '',
     orderId: null,
     qrisUrl: null,
+    qrString: null,
+    testMode: false,
     error: null,
   });
 
@@ -92,7 +96,7 @@ export function useCheckout(product: CheckoutProduct | null) {
         }
 
         const data = await res.json();
-        go({ orderId: data.orderId, qrisUrl: data.qrisUrl, step: 'payment' });
+        go({ orderId: data.orderId, qrisUrl: data.qrisUrl, qrString: data.qrString || null, testMode: data.testMode || false, step: 'payment' });
       } catch {
         go({ error: 'Koneksi gagal. Coba lagi.', step: 'confirm' });
       }
@@ -127,6 +131,8 @@ export function useCheckout(product: CheckoutProduct | null) {
         buyerPhone: '',
         orderId: null,
         qrisUrl: null,
+        qrString: null,
+        testMode: false,
         error: null,
       });
     },

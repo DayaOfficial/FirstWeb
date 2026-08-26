@@ -51,10 +51,27 @@ export async function getDigiflazz() {
  * Auth: api_id (int) + api_key (string) — per jokerpanel.com/doc
  */
 export async function getJoker() {
-  const m = await getSettings(['jokerpanel_api_id', 'jokerpanel_api_key']);
+  const m = await getSettings([
+    'jokerpanel_api_id', 'jokerpanel_api_key',
+    'jokerpanel_relay', 'jokerpanel_relay_secret',
+  ]);
   return {
     apiId: Number(m.jokerpanel_api_id || process.env.JOKERPANEL_API_ID || 0),
     apiKey: m.jokerpanel_api_key || process.env.JOKERPANEL_API_KEY || '',
+    relay: m.jokerpanel_relay || '',
+    relaySecret: m.jokerpanel_relay_secret || '',
+  };
+}
+
+/**
+ * Get Pakasir (QRIS) credentials.
+ * Source priority: Supabase settings → process.env
+ */
+export async function getPakasir() {
+  const m = await getSettings(['pakasir_merchant_code', 'pakasir_api_key']);
+  return {
+    slug: m.pakasir_merchant_code || process.env.PAKASIR_SLUG || '',
+    apiKey: m.pakasir_api_key || process.env.PAKASIR_API_KEY || '',
   };
 }
 
