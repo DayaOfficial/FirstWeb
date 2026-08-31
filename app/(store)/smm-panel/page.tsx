@@ -7,28 +7,22 @@ import { useCheckout } from '@/hooks/use-checkout';
 import PaymentStep from '@/components/checkout/payment-step';
 import {
   ChevronRight, Share2, ShoppingCart, Info, Gauge, BadgeCheck,
-  ArrowDown, ArrowUp, Loader2, Camera, CirclePlay, Music2, Hash,
-  Globe, MessageCircle, Send, Smartphone,
+  ArrowDown, ArrowUp, Loader2, Globe,
 } from 'lucide-react';
 import Link from 'next/link';
 
-/* ── Ikon platform ── */
-const PLATFORM_ICONS: Record<string, any> = {
-  instagram: Camera,
-  youtube: CirclePlay,
-  tiktok: Music2,
-  twitter: Hash,
-  x: Hash,
-  facebook: Globe,
-  telegram: Send,
-  whatsapp: MessageCircle,
-  spotify: Music2,
-  threads: Smartphone,
-};
-
-function getPlatformIcon(name: string) {
-  const key = name.toLowerCase();
-  return PLATFORM_ICONS[key] || Globe;
+/* ── Interface produk SMM ── */
+interface SMMProduct {
+  id: string;
+  name: string;
+  brand: string;
+  price_sell: number;
+  provider_code: string;
+  description: string;
+  min_qty: number;
+  max_qty: number;
+  smm_category: string;
+  platform_icon_url: string | null;
 }
 
 /* ── Komponen kartu langkah ── */
@@ -56,17 +50,20 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-/* ── Interface produk ── */
-interface SMMProduct {
-  id: string;
-  name: string;
-  brand: string;
-  price_sell: number;
-  provider_code: string;
-  description: string;
-  min_qty: number;
-  max_qty: number;
-  smm_category: string;
+/* ── Ikon platform: gunakan icon_url dari DB jika ada, fallback ke lucide Globe ── */
+function PlatformIcon({ iconUrl, name, size = 32 }: { iconUrl?: string | null; name: string; size?: number }) {
+  if (iconUrl) {
+    return (
+      <img
+        src={iconUrl}
+        alt={name}
+        className="object-contain"
+        style={{ width: size, height: size }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
+  }
+  return <Globe size={size} />;
 }
 
 /* ===== HALAMAN UTAMA ===== */
@@ -92,7 +89,7 @@ export default function SMMPanelPage() {
     (async () => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price_sell, provider_code, description, min_qty, max_qty, smm_category')
+        .select('id, name, brand, price_sell, provider_code, description, min_qty, max_qty, smm_category, platform_icon_url')
         .eq('module', 'jokerpanel')
         .eq('is_active', true)
         .order('brand', { ascending: true });
@@ -112,6 +109,7 @@ export default function SMMPanelPage() {
           min_qty: Number(p.min_qty) || 10,
           max_qty: Number(p.max_qty) || 100000,
           smm_category: p.smm_category ?? '',
+          platform_icon_url: p.platform_icon_url ?? null,
         }))
       );
       setLoading(false);
@@ -119,11 +117,20 @@ export default function SMMPanelPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Daftar platform unik
-  const platforms = useMemo(
-    () => Array.from(new Set(products.map((p) => p.brand))),
-    [products]
-  );
+  // Daftar platform unik + ambil icon_url pertama yang ditemukan per platform
+  const platformsData = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const p of products) {
+      if (!map.has(p.brand)) {
+        map.set(p.brand, p.platform_icon_url);
+      }
+      // Update icon jika ada yang punya icon dan yang sebelumnya null
+      if (!map.get(p.brand) && p.platform_icon_url) {
+        map.set(p.brand, p.platform_icon_url);
+      }
+    }
+    return Array.from(map.entries()).map(([name, iconUrl]) => ({ name, iconUrl }));
+  }, [products]);
 
   // Layanan yang sesuai platform terpilih
   const filteredServices = useMemo(
@@ -191,7 +198,7 @@ export default function SMMPanelPage() {
         <nav className="flex items-center gap-2 text-sm text-on-surface-variant">
           <Link href="/" className="hover:text-primary transition-colors">Beranda</Link>
           <ChevronRight size={14} />
-          <Link href="/smm-panel" className="hover:text-primary transition-colors" onClick={(e) => { e.preventDefault(); setCheckoutPhase('form'); }}>Sosial Media</Link>
+          <button className="hover:text-primary transition-colors" onClick={() => setCheckoutPhase('form')}>Sosial Media</button>
           <ChevronRight size={14} />
           <span className="text-primary font-semibold">Pembayaran</span>
         </nav>
@@ -208,7 +215,7 @@ export default function SMMPanelPage() {
     );
   }
 
-  // Fase form utama
+  // Fase form utama — sesuai referensi gambar
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Breadcrumb */}
@@ -218,42 +225,43 @@ export default function SMMPanelPage() {
         <span className="text-primary font-semibold">Sosial Media</span>
       </nav>
 
-      <h1 className="text-2xl lg:text-3xl font-bold text-primary font-[family-name:var(--font-heading)] flex items-center gap-2">
-        <Share2 size={28} /> Sosial Media (SMM Panel)
-      </h1>
-      <p className="text-sm text-on-surface-variant -mt-4">Buat pesanan baru untuk layanan sosial media.</p>
+      <div>
+        <h1 className="text-2xl lg:text-3xl font-bold text-on-surface font-[family-name:var(--font-heading)]">
+          Sosial Media (SMM Panel)
+        </h1>
+        <p className="text-sm text-on-surface-variant mt-1">Buat pesanan baru untuk layanan sosial media.</p>
+      </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* ══════════ FORM UTAMA (2 kolom) ══════════ */}
         <div className="lg:col-span-2 space-y-6">
 
-          {/* ── Langkah 1: Pilih Kategori/Platform ── */}
+          {/* ── Langkah 1: Pilih Kategori ── */}
           <StepCard n={1} title="Pilih Kategori">
-            {platforms.length === 0 ? (
+            {platformsData.length === 0 ? (
               <p className="text-center text-sm text-on-surface-variant py-6">
                 Belum ada layanan SMM. Owner perlu sync dari JokerPanel di panel.
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {platforms.map((p) => {
-                  const Icon = getPlatformIcon(p);
-                  const isActive = platform === p;
+                {platformsData.map((p) => {
+                  const isActive = platform === p.name;
                   return (
                     <button
-                      key={p}
+                      key={p.name}
                       onClick={() => {
-                        setPlatform(p);
+                        setPlatform(p.name);
                         setService(null);
                         setQty(1000);
                       }}
-                      className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all capitalize
+                      className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all
                         ${isActive
                           ? 'border-primary bg-primary/5 text-primary shadow-sm'
                           : 'border-outline-variant/30 hover:border-primary/40 text-on-surface-variant hover:text-on-surface'
                         }`}
                     >
-                      <Icon size={28} className="mb-2" />
-                      <span className="text-sm font-semibold">{p}</span>
+                      <PlatformIcon iconUrl={p.iconUrl} name={p.name} size={32} />
+                      <span className="text-sm font-semibold mt-2 capitalize">{p.name}</span>
                     </button>
                   );
                 })}
@@ -263,6 +271,7 @@ export default function SMMPanelPage() {
 
           {/* ── Langkah 2: Pilih Layanan ── */}
           <StepCard n={2} title="Pilih Layanan">
+            <p className="text-xs text-on-surface-variant mb-2">Layanan Tersedia</p>
             <select
               value={service?.id || ''}
               disabled={!platform}
@@ -278,7 +287,7 @@ export default function SMMPanelPage() {
               </option>
               {filteredServices.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} — {formatRupiah(s.price_sell)}/1K
+                  {s.name} - {formatRupiah(s.price_sell)}/1K
                 </option>
               ))}
             </select>
@@ -288,7 +297,7 @@ export default function SMMPanelPage() {
           <StepCard n={3} title="Input Data">
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-semibold text-on-surface">Link Target / Username</label>
+                <label className="text-sm font-medium text-on-surface">Link Target / Username</label>
                 <input
                   value={target}
                   onChange={(e) => setTarget(e.target.value)}
@@ -297,7 +306,7 @@ export default function SMMPanelPage() {
                 />
               </div>
               <div>
-                <label className="text-sm font-semibold text-on-surface">Jumlah (Quantity)</label>
+                <label className="text-sm font-medium text-on-surface">Jumlah (Quantity)</label>
                 <input
                   type="number"
                   value={clampedQty}
@@ -307,11 +316,6 @@ export default function SMMPanelPage() {
                   onChange={(e) => setQty(Number(e.target.value))}
                   className="w-full mt-1.5 px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                 />
-                {service && (
-                  <p className="text-[11px] text-on-surface-variant mt-1">
-                    Min {min.toLocaleString('id-ID')} · Max {max.toLocaleString('id-ID')}
-                  </p>
-                )}
               </div>
             </div>
           </StepCard>
@@ -322,8 +326,7 @@ export default function SMMPanelPage() {
 
           {/* ── Ringkasan Pesanan ── */}
           <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-6 shadow-soft sticky top-24">
-            <h3 className="font-bold text-on-surface mb-4 font-[family-name:var(--font-heading)] flex items-center gap-2">
-              <ShoppingCart size={18} className="text-primary" />
+            <h3 className="font-bold text-on-surface mb-4 font-[family-name:var(--font-heading)]">
               Ringkasan Pesanan
             </h3>
 
@@ -333,7 +336,7 @@ export default function SMMPanelPage() {
             />
             <SummaryRow
               label="Jumlah Pesanan"
-              value={clampedQty.toLocaleString('id-ID')}
+              value={service ? clampedQty.toLocaleString('id-ID') : '—'}
             />
 
             <div className="border-t border-outline-variant/30 my-3" />
@@ -385,7 +388,7 @@ export default function SMMPanelPage() {
               </div>
 
               <div className="mt-3 p-3 rounded-xl bg-error/5 border border-error/20 text-error text-xs font-medium">
-                ⚠️ Pastikan akun tidak di-private saat proses berlangsung!
+                Pastikan akun tidak di-private saat proses berlangsung!
               </div>
             </div>
           )}

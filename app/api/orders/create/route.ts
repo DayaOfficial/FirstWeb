@@ -82,54 +82,69 @@ export async function POST(req: Request) {
   }
 
   // === Integrasi Pakasir QRIS ===
+  // Mengikuti pola persis dari kode referensi Pakasir:
+  //   POST https://app.pakasir.com/api/transactioncreate/qris
+  //   body: { project: slug, order_id, amount, api_key }
+  //   response: { payment: { payment_number: "QR_STRING", expired_at, ... } }
+  //   Render QR string menjadi gambar adalah tanggung jawab merchant (frontend)
+
   const testSettings = await getSettings(['test_mode']);
   const testMode = testSettings.test_mode === 'true';
 
   let qrString: string | null = null;
-  let totalPayment: number = Number(amount);
-  let paymentRef: string | null = null;
   let pakasirExpiresAt: string | null = null;
 
   if (!testMode) {
     try {
       const pk = await getPakasir();
       if (pk.slug && pk.apiKey) {
-        const pakasirBase = 'https://app.pakasir.com/api';
-        const res = await fetch(pakasirBase + '/transactioncreate/qris', {
+        const url = 'https://app.pakasir.com/api/transactioncreate/qris';
+        const pakasirBody = {
+          project: pk.slug,
+          order_id: orderCode,
+          amount: Number(amount),
+          api_key: pk.apiKey,
+        };
+
+        console.log('[Pakasir] Creating QRIS:', { project: pk.slug, order_id: orderCode, amount: Number(amount) });
+
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project: pk.slug,           // slug proyek — sesuai dokumentasi Pakasir
-            order_id: orderCode,
-            amount: Number(amount),
-            api_key: pk.apiKey,
-          }),
+          body: JSON.stringify(pakasirBody),
         });
-        const json = await res.json().catch(() => ({}));
 
-        // Pakasir mengembalikan QR string di payment.payment_number
-        // Bukan URL gambar — render menjadi gambar adalah tanggung jawab merchant
-        const pay = json?.payment;
-        if (pay?.payment_number) {
-          qrString = pay.payment_number;
-          totalPayment = Number(pay.total_payment) || Number(amount);
-          pakasirExpiresAt = pay.expired_at || null;
-          paymentRef = pay.reference || pay.id || null;
-        } else {
-          // Fallback: coba field-field alternatif (backward compat)
-          qrString = json.qr_string || json.data?.qr_string || null;
-          paymentRef = json.reference || json.ref || json.transaction_id || json.data?.reference || null;
+        const text = await res.text();
+        let json: any;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          console.error('[Pakasir] Response bukan JSON:', text.substring(0, 200));
+          json = {};
         }
 
-        // Simpan referensi ke order
-        if (qrString || paymentRef) {
+        console.log('[Pakasir] Response:', JSON.stringify(json).substring(0, 500));
+
+        // Pakasir mengembalikan: { payment: { payment_number: "QR_STRING", expired_at: "...", ... } }
+        const payment = json?.payment;
+        if (payment?.payment_number) {
+          qrString = payment.payment_number;
+          pakasirExpiresAt = payment.expired_at || null;
+
+          // Simpan referensi ke order
           await serviceSupabase.from('orders').update({
-            payment_ref: paymentRef,
+            payment_ref: orderCode,
           }).eq('id', order.id);
+
+          console.log('[Pakasir] ✅ QR String diterima, panjang:', qrString!.length);
+        } else {
+          console.error('[Pakasir] payment_number tidak ditemukan dalam response:', JSON.stringify(json));
         }
+      } else {
+        console.error('[Pakasir] slug atau apiKey belum dikonfigurasi');
       }
     } catch (err: any) {
-      console.error('[create-order] Pakasir error:', err?.message || err);
+      console.error('[Pakasir] Error:', err?.message || err);
       // Lanjut tanpa QR — tidak gagalkan order
     }
   }
@@ -138,7 +153,6 @@ export async function POST(req: Request) {
     orderId: order.id,
     orderCode: order.order_code,
     qrString,
-    totalPayment,
     testMode,
     amount: Number(amount),
     expiresAt: pakasirExpiresAt || expiresAt.toISOString(),

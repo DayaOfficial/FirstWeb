@@ -37,15 +37,28 @@ export default async function ProfilPage() {
   // Load orders
   const { data: orders } = await supabase
     .from('orders')
-    .select('id, order_code, product_name, module, amount, payment_status, process_status, created_at')
+    .select('id, order_code, product_name, module, amount, payment_status, process_status, created_at, expires_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(100);
 
+  // Auto-cancel expired pending orders (QRIS sudah kedaluwarsa)
+  const now = new Date();
+  const cleanedOrders = (orders ?? []).filter((o: any) => {
+    if (o.payment_status === 'pending') {
+      const expiresAt = o.expires_at ? new Date(o.expires_at) : new Date(new Date(o.created_at).getTime() + 15 * 60 * 1000);
+      if (now > expiresAt) {
+        // Order ini sudah expired — sembunyikan dari tampilan
+        return false;
+      }
+    }
+    return true;
+  });
+
   return (
     <ProfilView
       profile={resolvedProfile}
-      orders={(orders ?? []) as any}
+      orders={cleanedOrders as any}
       isOwner={resolvedProfile.role === 'owner'}
     />
   );

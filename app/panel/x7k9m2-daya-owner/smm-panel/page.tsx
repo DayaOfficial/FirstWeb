@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { RefreshCw, Search, Check, ChevronDown, ChevronRight, Share2 } from 'lucide-react';
+import { RefreshCw, Search, Check, ChevronDown, ChevronRight, Share2, Image as ImageIcon, X } from 'lucide-react';
 
 interface SmmProduct {
   id: string;
@@ -14,6 +14,7 @@ interface SmmProduct {
   is_active: boolean;
   description: string | null;
   provider_service_id: string;
+  platform_icon_url: string | null;
 }
 
 export default function SmmPanelOwnerPage() {
@@ -23,6 +24,10 @@ export default function SmmPanelOwnerPage() {
   const [search, setSearch] = useState('');
   const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
   const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  // State untuk edit ikon platform
+  const [editingIcon, setEditingIcon] = useState<string | null>(null); // nama platform
+  const [iconInput, setIconInput] = useState('');
 
   const load = useCallback(async () => {
     const { data } = await sb.from('products').select('*')
@@ -64,6 +69,18 @@ export default function SmmPanelOwnerPage() {
     });
   }
 
+  // Set icon URL untuk semua produk dengan brand yang sama
+  async function savePlatformIcon(platformName: string, url: string) {
+    const trimmed = url.trim();
+    const targetRows = rows.filter(r => r.brand === platformName);
+    for (const r of targetRows) {
+      await sb.from('products').update({ platform_icon_url: trimmed || null }).eq('id', r.id);
+    }
+    setEditingIcon(null);
+    setIconInput('');
+    await load();
+  }
+
   function togglePlatform(p: string) {
     setExpandedPlatforms(prev => {
       const next = new Set(prev);
@@ -76,6 +93,12 @@ export default function SmmPanelOwnerPage() {
     !search || r.name.toLowerCase().includes(search.toLowerCase()) || r.brand.toLowerCase().includes(search.toLowerCase())
   );
   const platforms = Array.from(new Set(filtered.map(r => r.brand)));
+
+  // Ambil icon URL per platform (dari produk pertama yang punya)
+  function getPlatformIconUrl(platformName: string): string | null {
+    const found = rows.find(r => r.brand === platformName && r.platform_icon_url);
+    return found?.platform_icon_url || null;
+  }
 
   return (
     <div className="space-y-6">
@@ -122,21 +145,86 @@ export default function SmmPanelOwnerPage() {
         const pRows = filtered.filter(r => r.brand === p);
         const activeCount = pRows.filter(r => r.is_active).length;
         const isExpanded = expandedPlatforms.has(p);
+        const currentIconUrl = getPlatformIconUrl(p);
 
         return (
           <div key={p} className="rounded-2xl bg-surface-container-lowest border border-outline-variant/20 shadow-soft overflow-hidden">
-            <button
-              onClick={() => togglePlatform(p)}
-              className="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-container-low transition-colors"
-            >
-              <div className="flex items-center gap-3">
+            <div className="w-full flex items-center justify-between px-5 py-4 hover:bg-surface-container-low transition-colors">
+              <button
+                onClick={() => togglePlatform(p)}
+                className="flex items-center gap-3 flex-1"
+              >
                 {isExpanded ? <ChevronDown size={18} className="text-primary" /> : <ChevronRight size={18} className="text-on-surface-variant" />}
+
+                {/* Ikon platform */}
+                {currentIconUrl ? (
+                  <img src={currentIconUrl} alt={p} className="w-6 h-6 rounded object-contain" />
+                ) : (
+                  <div className="w-6 h-6 rounded bg-surface-container-high flex items-center justify-center">
+                    <span className="text-[10px] font-bold text-on-surface-variant uppercase">{p.charAt(0)}</span>
+                  </div>
+                )}
+
                 <span className="font-bold text-on-surface capitalize">{p}</span>
                 <span className="text-xs text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
                   {pRows.length} layanan · {activeCount} aktif
                 </span>
+              </button>
+
+              {/* Tombol set ikon */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingIcon(editingIcon === p ? null : p);
+                  setIconInput(currentIconUrl || '');
+                }}
+                className={`ml-2 p-2 rounded-lg text-xs font-medium transition-colors ${
+                  currentIconUrl
+                    ? 'bg-green-50 text-green-600 border border-green-200 hover:bg-green-100'
+                    : 'bg-surface-container-high text-on-surface-variant border border-outline-variant/30 hover:border-primary/40'
+                }`}
+                title="Atur ikon platform"
+              >
+                <ImageIcon size={14} />
+              </button>
+            </div>
+
+            {/* Panel edit ikon */}
+            {editingIcon === p && (
+              <div className="px-5 pb-4 pt-0 border-t border-outline-variant/20 animate-fade-in">
+                <div className="flex items-center gap-2 p-3 bg-surface-container-low rounded-xl">
+                  <ImageIcon size={14} className="text-on-surface-variant shrink-0" />
+                  <input
+                    type="text"
+                    value={iconInput}
+                    onChange={(e) => setIconInput(e.target.value)}
+                    placeholder="URL ikon/logo platform (contoh: https://...png)"
+                    className="flex-1 text-sm bg-transparent outline-none text-on-surface placeholder:text-on-surface-variant/50"
+                  />
+                  <button
+                    onClick={() => savePlatformIcon(p, iconInput)}
+                    className="px-3 py-1 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90 transition-all"
+                  >
+                    Simpan
+                  </button>
+                  {currentIconUrl && (
+                    <button
+                      onClick={() => savePlatformIcon(p, '')}
+                      className="p-1 rounded-lg text-error hover:bg-error/10 transition-colors"
+                      title="Hapus ikon"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                {currentIconUrl && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-[11px] text-on-surface-variant">Preview:</span>
+                    <img src={currentIconUrl} alt={p} className="w-8 h-8 rounded object-contain border border-outline-variant/30" />
+                  </div>
+                )}
               </div>
-            </button>
+            )}
 
             {isExpanded && (
               <div className="border-t border-outline-variant/20 divide-y divide-outline-variant/10">
