@@ -1,50 +1,93 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useCheckout } from '@/hooks/use-checkout';
-import ConfirmationStep from '@/components/checkout/confirmation-step';
-import PaymentStep from '@/components/checkout/payment-step';
-import { formatRupiah } from '@/lib/utils';
-import { ChevronRight, Share2, Search, ExternalLink, Loader2 } from 'lucide-react';
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { formatRupiah } from '@/lib/utils';
+import { useCheckout } from '@/hooks/use-checkout';
+import PaymentStep from '@/components/checkout/payment-step';
+import {
+  ChevronRight, Share2, ShoppingCart, Info, Gauge, BadgeCheck,
+  ArrowDown, ArrowUp, Loader2, Camera, CirclePlay, Music2, Hash,
+  Globe, MessageCircle, Send, Smartphone,
+} from 'lucide-react';
+import Link from 'next/link';
 
-interface SMMService {
-  id: string;
-  name: string;
-  platform: string;
-  smm_category: string;
-  price_per_k: number;
-  provider_service_id: string;
-  description: string;
-  min_qty: number;
-  max_qty: number;
+/* ── Ikon platform ── */
+const PLATFORM_ICONS: Record<string, any> = {
+  instagram: Camera,
+  youtube: CirclePlay,
+  tiktok: Music2,
+  twitter: Hash,
+  x: Hash,
+  facebook: Globe,
+  telegram: Send,
+  whatsapp: MessageCircle,
+  spotify: Music2,
+  threads: Smartphone,
+};
+
+function getPlatformIcon(name: string) {
+  const key = name.toLowerCase();
+  return PLATFORM_ICONS[key] || Globe;
 }
 
-function StepTitle({ n, title }: { n: number; title: string }) {
+/* ── Komponen kartu langkah ── */
+function StepCard({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
-    <h2 className="flex items-center gap-2 font-bold mb-3 font-[family-name:var(--font-heading)] text-on-surface">
-      <span className="w-7 h-7 rounded-full gradient-primary text-white text-sm flex items-center justify-center font-bold">{n}</span>
-      {title}
-    </h2>
+    <div className="rounded-2xl bg-surface-container-lowest border border-outline-variant/30 p-6 shadow-soft">
+      <h3 className="font-bold mb-4 flex items-center gap-3 text-on-surface font-[family-name:var(--font-heading)]">
+        <span className="w-8 h-8 rounded-full gradient-primary text-white flex items-center justify-center text-sm font-bold shrink-0">
+          {n}
+        </span>
+        {title}
+      </h3>
+      {children}
+    </div>
   );
 }
 
+/* ── Baris ringkasan ── */
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between text-sm py-1.5">
+      <span className="text-on-surface-variant">{label}</span>
+      <span className="font-medium text-on-surface">{value}</span>
+    </div>
+  );
+}
+
+/* ── Interface produk ── */
+interface SMMProduct {
+  id: string;
+  name: string;
+  brand: string;
+  price_sell: number;
+  provider_code: string;
+  description: string;
+  min_qty: number;
+  max_qty: number;
+  smm_category: string;
+}
+
+/* ===== HALAMAN UTAMA ===== */
 export default function SMMPanelPage() {
   const supabase = createClient();
   const { state, go } = useCheckout({ name: 'SMM Panel', needs_target: false });
-  const [step, setStep] = useState<'service' | 'input' | 'confirm' | 'payment'>('service');
-  const [services, setServices] = useState<SMMService[]>([]);
+
+  const [products, setProducts] = useState<SMMProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedPlatform, setSelectedPlatform] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedService, setSelectedService] = useState<SMMService | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [targetLink, setTargetLink] = useState('');
-  const [quantity, setQuantity] = useState(1000);
+  // Form state
+  const [platform, setPlatform] = useState<string | null>(null);
+  const [service, setService] = useState<SMMProduct | null>(null);
+  const [target, setTarget] = useState('');
+  const [qty, setQty] = useState(1000);
 
-  // Load services from Supabase on mount
+  // Checkout state
+  const [checkoutPhase, setCheckoutPhase] = useState<'form' | 'payment'>('form');
+  const [ordering, setOrdering] = useState(false);
+
+  // Load produk SMM dari Supabase
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase
@@ -58,46 +101,81 @@ export default function SMMPanelPage() {
         console.error('[SMM] load error:', error.message);
       }
 
-      setServices((data ?? []).map(p => ({
-        id: p.id,
-        name: p.name,
-        platform: p.brand ?? 'Lainnya',
-        smm_category: p.smm_category ?? '',
-        price_per_k: Number(p.price_sell),
-        provider_service_id: p.provider_code ?? '',
-        description: p.description ?? '',
-        min_qty: Number(p.min_qty) || 10,
-        max_qty: Number(p.max_qty) || 100000,
-      })));
+      setProducts(
+        (data ?? []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          brand: p.brand ?? 'Lainnya',
+          price_sell: Number(p.price_sell),
+          provider_code: p.provider_code ?? '',
+          description: p.description ?? '',
+          min_qty: Number(p.min_qty) || 10,
+          max_qty: Number(p.max_qty) || 100000,
+          smm_category: p.smm_category ?? '',
+        }))
+      );
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const platforms = useMemo(() => [...new Set(services.map(s => s.platform))], [services]);
-
-  // Filter by platform and search
-  const byPlatformAndSearch = useMemo(() =>
-    services
-      .filter(s => !selectedPlatform || s.platform === selectedPlatform)
-      .filter(s => !searchQuery || s.name.toLowerCase().includes(searchQuery.toLowerCase())),
-    [services, selectedPlatform, searchQuery]
+  // Daftar platform unik
+  const platforms = useMemo(
+    () => Array.from(new Set(products.map((p) => p.brand))),
+    [products]
   );
 
-  // Categories for current platform (from smm_category)
-  const categories = useMemo(() =>
-    [...new Set(byPlatformAndSearch.map(s => s.smm_category).filter(Boolean))],
-    [byPlatformAndSearch]
+  // Layanan yang sesuai platform terpilih
+  const filteredServices = useMemo(
+    () => products.filter((p) => p.brand === platform),
+    [products, platform]
   );
 
-  // Final filtered services
-  const filtered = useMemo(() =>
-    byPlatformAndSearch.filter(s => !selectedCategory || s.smm_category === selectedCategory),
-    [byPlatformAndSearch, selectedCategory]
-  );
+  // Min/max dari service terpilih
+  const min = service?.min_qty || 10;
+  const max = service?.max_qty || 100000;
+  const clampedQty = Math.min(max, Math.max(qty || min, min));
 
-  const totalPrice = selectedService ? Math.round((selectedService.price_per_k / 1000) * quantity) : 0;
+  // Harga total: (qty / 1000) × harga per 1K
+  const total = service ? Math.round((clampedQty / 1000) * service.price_sell) : 0;
 
+  // Handler beli
+  async function handleBuy() {
+    if (!service || !target.trim()) return;
+    setOrdering(true);
+    try {
+      const res = await fetch('/api/orders/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_id: service.id,
+          product_name: service.name,
+          target_input: target,
+          amount: total,
+          quantity: clampedQty,
+          nominal_code: service.provider_code,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert('Gagal membuat pesanan: ' + (data?.error || 'Unknown'));
+        setOrdering(false);
+        return;
+      }
+      go({
+        orderId: data.orderId,
+        qrString: data.qrString,
+        testMode: data.testMode,
+      });
+      setCheckoutPhase('payment');
+    } catch (err: any) {
+      alert('Gagal: Kesalahan jaringan');
+      console.error('[SMM] order error:', err);
+    }
+    setOrdering(false);
+  }
+
+  // Loading
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -106,8 +184,33 @@ export default function SMMPanelPage() {
     );
   }
 
+  // Fase pembayaran
+  if (checkoutPhase === 'payment') {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <nav className="flex items-center gap-2 text-sm text-on-surface-variant">
+          <Link href="/" className="hover:text-primary transition-colors">Beranda</Link>
+          <ChevronRight size={14} />
+          <Link href="/smm-panel" className="hover:text-primary transition-colors" onClick={(e) => { e.preventDefault(); setCheckoutPhase('form'); }}>Sosial Media</Link>
+          <ChevronRight size={14} />
+          <span className="text-primary font-semibold">Pembayaran</span>
+        </nav>
+
+        <PaymentStep
+          orderId={state.orderId}
+          qrisUrl={null}
+          qrString={state.qrString}
+          testMode={state.testMode}
+          amount={total}
+          productName={service?.name || 'SMM'}
+        />
+      </div>
+    );
+  }
+
+  // Fase form utama
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm text-on-surface-variant">
         <Link href="/" className="hover:text-primary transition-colors">Beranda</Link>
@@ -116,225 +219,178 @@ export default function SMMPanelPage() {
       </nav>
 
       <h1 className="text-2xl lg:text-3xl font-bold text-primary font-[family-name:var(--font-heading)] flex items-center gap-2">
-        <Share2 size={28} /> Sosial Media Marketing
+        <Share2 size={28} /> Sosial Media (SMM Panel)
       </h1>
+      <p className="text-sm text-on-surface-variant -mt-4">Buat pesanan baru untuk layanan sosial media.</p>
 
-      {/* Step 1: Pilih Layanan */}
-      {step === 'service' && (
-        <section className="space-y-4">
-          <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 shadow-soft">
-            <StepTitle n={1} title="Platform Layanan" />
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* ══════════ FORM UTAMA (2 kolom) ══════════ */}
+        <div className="lg:col-span-2 space-y-6">
 
-            {/* Platform chips */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              <button
-                onClick={() => { setSelectedPlatform(''); setSelectedCategory(''); setSelectedService(null); }}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  !selectedPlatform ? 'bg-primary text-white' : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
-                }`}
-              >
-                Semua
-              </button>
-              {platforms.map(p => (
-                <button
-                  key={p}
-                  onClick={() => { setSelectedPlatform(p); setSelectedCategory(''); setSelectedService(null); }}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all capitalize ${
-                    selectedPlatform === p ? 'bg-primary text-white' : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-
-            {/* Search */}
-            <div className="relative max-w-sm mb-4">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-              <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Cari layanan..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-outline-variant text-xs bg-surface-container-lowest outline-none focus:border-primary" />
-            </div>
-
-            {/* Category filter (from smm_category) */}
-            {categories.length > 0 && (
-              <>
-                <StepTitle n={2} title="Kategori" />
-                <div className="mb-4">
-                  <select
-                    value={selectedCategory}
-                    onChange={e => { setSelectedCategory(e.target.value); setSelectedService(null); }}
-                    className="w-full px-3 py-2.5 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                  >
-                    <option value="">Semua Kategori ({byPlatformAndSearch.length})</option>
-                    {categories.map(c => (
-                      <option key={c} value={c}>{c} ({byPlatformAndSearch.filter(s => s.smm_category === c).length})</option>
-                    ))}
-                  </select>
-                </div>
-              </>
-            )}
-
-            {/* Service list */}
-            <StepTitle n={categories.length > 0 ? 3 : 2} title="Pilih Layanan" />
-            <div className="divide-y divide-outline-variant/30 max-h-[500px] overflow-y-auto rounded-xl border border-outline-variant/30">
-              {filtered.map(s => (
-                <button
-                  key={s.id}
-                  onClick={() => { setSelectedService(s); setStep('input'); }}
-                  className={`w-full text-left p-4 hover:bg-surface-container-low transition-colors ${
-                    selectedService?.id === s.id ? 'bg-primary/5' : ''
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-on-surface leading-tight">{s.name}</p>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="text-[10px] bg-surface-container-high px-2 py-0.5 rounded-full text-on-surface-variant font-medium">{s.platform}</span>
-                        {s.smm_category && (
-                          <span className="text-[10px] bg-surface-container-high px-2 py-0.5 rounded-full text-on-surface-variant font-medium">{s.smm_category}</span>
-                        )}
-                        <span className="text-[10px] text-on-surface-variant">Min {s.min_qty.toLocaleString('id-ID')} · Max {s.max_qty.toLocaleString('id-ID')}</span>
-                      </div>
-                    </div>
-                    <p className="text-sm font-bold text-primary font-[family-name:var(--font-heading)] shrink-0">
-                      {formatRupiah(s.price_per_k)}/1K
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {filtered.length === 0 && (
-              <p className="text-center text-sm text-on-surface-variant py-8">
-                {services.length === 0
-                  ? 'Belum ada layanan SMM. Owner perlu sync dari JokerPanel di panel.'
-                  : 'Tidak ada layanan yang cocok dengan filter.'}
+          {/* ── Langkah 1: Pilih Kategori/Platform ── */}
+          <StepCard n={1} title="Pilih Kategori">
+            {platforms.length === 0 ? (
+              <p className="text-center text-sm text-on-surface-variant py-6">
+                Belum ada layanan SMM. Owner perlu sync dari JokerPanel di panel.
               </p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {platforms.map((p) => {
+                  const Icon = getPlatformIcon(p);
+                  const isActive = platform === p;
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => {
+                        setPlatform(p);
+                        setService(null);
+                        setQty(1000);
+                      }}
+                      className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all capitalize
+                        ${isActive
+                          ? 'border-primary bg-primary/5 text-primary shadow-sm'
+                          : 'border-outline-variant/30 hover:border-primary/40 text-on-surface-variant hover:text-on-surface'
+                        }`}
+                    >
+                      <Icon size={28} className="mb-2" />
+                      <span className="text-sm font-semibold">{p}</span>
+                    </button>
+                  );
+                })}
+              </div>
             )}
+          </StepCard>
+
+          {/* ── Langkah 2: Pilih Layanan ── */}
+          <StepCard n={2} title="Pilih Layanan">
+            <select
+              value={service?.id || ''}
+              disabled={!platform}
+              onChange={(e) => {
+                const found = filteredServices.find((s) => s.id === e.target.value);
+                setService(found || null);
+                if (found) setQty(found.min_qty);
+              }}
+              className="w-full px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-50"
+            >
+              <option value="">
+                {platform ? 'Pilih layanan…' : 'Pilih kategori terlebih dahulu'}
+              </option>
+              {filteredServices.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} — {formatRupiah(s.price_sell)}/1K
+                </option>
+              ))}
+            </select>
+          </StepCard>
+
+          {/* ── Langkah 3: Input Data ── */}
+          <StepCard n={3} title="Input Data">
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-semibold text-on-surface">Link Target / Username</label>
+                <input
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  placeholder="Contoh: https://instagram.com/username atau username"
+                  className="w-full mt-1.5 px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-on-surface">Jumlah (Quantity)</label>
+                <input
+                  type="number"
+                  value={clampedQty}
+                  min={min}
+                  max={max}
+                  step={100}
+                  onChange={(e) => setQty(Number(e.target.value))}
+                  className="w-full mt-1.5 px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                />
+                {service && (
+                  <p className="text-[11px] text-on-surface-variant mt-1">
+                    Min {min.toLocaleString('id-ID')} · Max {max.toLocaleString('id-ID')}
+                  </p>
+                )}
+              </div>
+            </div>
+          </StepCard>
+        </div>
+
+        {/* ══════════ SIDEBAR ══════════ */}
+        <div className="space-y-6">
+
+          {/* ── Ringkasan Pesanan ── */}
+          <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-6 shadow-soft sticky top-24">
+            <h3 className="font-bold text-on-surface mb-4 font-[family-name:var(--font-heading)] flex items-center gap-2">
+              <ShoppingCart size={18} className="text-primary" />
+              Ringkasan Pesanan
+            </h3>
+
+            <SummaryRow
+              label="Harga per 1.000"
+              value={service ? formatRupiah(service.price_sell) : '—'}
+            />
+            <SummaryRow
+              label="Jumlah Pesanan"
+              value={clampedQty.toLocaleString('id-ID')}
+            />
+
+            <div className="border-t border-outline-variant/30 my-3" />
+
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-on-surface">Total Harga</span>
+              <span className="text-xl font-extrabold text-primary font-[family-name:var(--font-heading)]">
+                {formatRupiah(total)}
+              </span>
+            </div>
+
+            <button
+              disabled={!service || !target.trim() || ordering}
+              onClick={handleBuy}
+              className="w-full mt-5 py-3 rounded-xl gradient-primary text-white font-bold flex items-center justify-center gap-2 shadow-md hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {ordering ? (
+                <><Loader2 size={18} className="animate-spin" /> Memproses…</>
+              ) : (
+                <><ShoppingCart size={18} /> Beli Sekarang</>
+              )}
+            </button>
           </div>
-        </section>
-      )}
 
-      {/* Step 2: Input Link + Quantity */}
-      {step === 'input' && selectedService && (
-        <section className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 shadow-soft max-w-lg">
-          <StepTitle n={categories.length > 0 ? 4 : 3} title="Isi Detail Pesanan" />
+          {/* ── Informasi Layanan ── */}
+          {service && (
+            <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-6 text-sm text-on-surface-variant space-y-3 shadow-soft animate-fade-in">
+              <h3 className="flex items-center gap-2 font-bold text-on-surface font-[family-name:var(--font-heading)]">
+                <Info size={16} className="text-primary" /> Informasi Layanan
+              </h3>
 
-          <div className="mb-4 p-3 rounded-xl bg-surface-container-high text-sm">
-            <span className="text-on-surface-variant">Layanan: </span>
-            <span className="font-semibold text-on-surface">{selectedService.name}</span>
-            <button onClick={() => setStep('service')} className="ml-3 text-primary text-xs font-semibold hover:underline">Ubah</button>
-          </div>
+              <div className="space-y-2">
+                <p className="flex items-start gap-2">
+                  <Gauge size={16} className="shrink-0 mt-0.5 text-primary/60" />
+                  <span><strong>Kecepatan:</strong> Lihat deskripsi layanan</span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <BadgeCheck size={16} className="shrink-0 mt-0.5 text-primary/60" />
+                  <span><strong>Kualitas:</strong> {service.description || '—'}</span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <ArrowDown size={16} className="shrink-0 mt-0.5 text-primary/60" />
+                  <span><strong>Minimal Pesan:</strong> {min.toLocaleString('id-ID')}</span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <ArrowUp size={16} className="shrink-0 mt-0.5 text-primary/60" />
+                  <span><strong>Maksimal Pesan:</strong> {max.toLocaleString('id-ID')}</span>
+                </p>
+              </div>
 
-          {selectedService.description && (
-            <div className="mb-4 p-3 rounded-xl bg-surface-container-low text-xs text-on-surface-variant border border-outline-variant/20">
-              {selectedService.description}
+              <div className="mt-3 p-3 rounded-xl bg-error/5 border border-error/20 text-error text-xs font-medium">
+                ⚠️ Pastikan akun tidak di-private saat proses berlangsung!
+              </div>
             </div>
           )}
-
-          <label className="text-sm font-semibold text-on-surface">Link / Username *</label>
-          <div className="relative mt-1 mb-3">
-            <ExternalLink size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-            <input type="url" value={targetLink} onChange={e => setTargetLink(e.target.value)}
-              placeholder="https://instagram.com/username atau link post"
-              className="w-full pl-10 pr-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-          </div>
-
-          <label className="text-sm font-semibold text-on-surface">Jumlah *</label>
-          <input type="number" value={quantity}
-            onChange={e => setQuantity(Math.min(selectedService.max_qty, Math.max(selectedService.min_qty, Number(e.target.value))))}
-            min={selectedService.min_qty} max={selectedService.max_qty} step={100}
-            className="w-full mt-1 px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-          <p className="text-[11px] text-on-surface-variant mt-1">
-            Min {selectedService.min_qty.toLocaleString('id-ID')} · Max {selectedService.max_qty.toLocaleString('id-ID')}
-          </p>
-
-          {/* Price summary */}
-          <div className="mt-3 p-3 rounded-xl bg-surface-container-high flex justify-between text-sm">
-            <span className="text-on-surface-variant">Total ({quantity.toLocaleString('id-ID')})</span>
-            <span className="font-bold text-primary">{formatRupiah(totalPrice)}</span>
-          </div>
-
-          <button
-            disabled={!targetLink.trim() || quantity < 100}
-            onClick={() => {
-              go({
-                nominal: {
-                  id: selectedService.id,
-                  name: `${selectedService.name} (${quantity.toLocaleString('id-ID')})`,
-                  price: totalPrice,
-                  price_sell: totalPrice,
-                  provider_code: selectedService.provider_service_id,
-                },
-                targetInput: targetLink,
-                product: { name: selectedService.name },
-              });
-              setStep('confirm');
-            }}
-            className="w-full mt-4 py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all disabled:opacity-40"
-          >
-            Lanjut Konfirmasi
-          </button>
-        </section>
-      )}
-
-      {/* Step 3: Confirm */}
-      {step === 'confirm' && (
-        <ConfirmationStep
-          state={{
-            ...state,
-            product: { name: selectedService?.name || 'SMM' },
-            targetInput: targetLink,
-          }}
-          onConfirm={async () => {
-            setStep('payment');
-            try {
-              const res = await fetch('/api/orders/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  product_id: selectedService?.id,
-                  product_name: state.nominal?.name,
-                  target_input: targetLink,
-                  amount: totalPrice,
-                  quantity,
-                  nominal_code: selectedService?.provider_service_id,
-                }),
-              });
-              const data = await res.json();
-              if (!res.ok) {
-                alert('Gagal membuat pesanan: ' + (data?.error || 'Unknown'));
-                setStep('confirm');
-                return;
-              }
-              go({
-                orderId: data.orderId,
-                qrisUrl: data.qrisUrl,
-                qrString: data.qrString,
-                testMode: data.testMode,
-              });
-            } catch (err: any) {
-              alert('Gagal: Kesalahan jaringan');
-              console.error('[SMM] order error:', err);
-              setStep('confirm');
-            }
-          }}
-          onBack={() => setStep('input')}
-        />
-      )}
-
-      {/* Step 4: Payment */}
-      {step === 'payment' && (
-        <PaymentStep
-          orderId={state.orderId}
-          qrisUrl={state.qrisUrl}
-          qrString={state.qrString}
-          testMode={state.testMode}
-          amount={totalPrice}
-          productName={state.nominal?.name || 'SMM'}
-        />
-      )}
+        </div>
+      </div>
     </div>
   );
 }

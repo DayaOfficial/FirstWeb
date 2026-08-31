@@ -85,9 +85,10 @@ export async function POST(req: Request) {
   const testSettings = await getSettings(['test_mode']);
   const testMode = testSettings.test_mode === 'true';
 
-  let qrisUrl: string | null = null;
   let qrString: string | null = null;
+  let totalPayment: number = Number(amount);
   let paymentRef: string | null = null;
+  let pakasirExpiresAt: string | null = null;
 
   if (!testMode) {
     try {
@@ -98,23 +99,31 @@ export async function POST(req: Request) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            slug: pk.slug,
-            api_key: pk.apiKey,
-            amount: Number(amount),
+            project: pk.slug,           // slug proyek — sesuai dokumentasi Pakasir
             order_id: orderCode,
+            amount: Number(amount),
+            api_key: pk.apiKey,
           }),
         });
-        const qris = await res.json().catch(() => ({}));
+        const json = await res.json().catch(() => ({}));
 
-        // Toleran field — coba berbagai kemungkinan nama field
-        qrisUrl = qris.qr_url || qris.qr || qris.qris || qris.data?.qr_url || qris.data?.qr || null;
-        qrString = qris.qr_string || qris.data?.qr_string || null;
-        paymentRef = qris.reference || qris.ref || qris.transaction_id || qris.data?.reference || null;
+        // Pakasir mengembalikan QR string di payment.payment_number
+        // Bukan URL gambar — render menjadi gambar adalah tanggung jawab merchant
+        const pay = json?.payment;
+        if (pay?.payment_number) {
+          qrString = pay.payment_number;
+          totalPayment = Number(pay.total_payment) || Number(amount);
+          pakasirExpiresAt = pay.expired_at || null;
+          paymentRef = pay.reference || pay.id || null;
+        } else {
+          // Fallback: coba field-field alternatif (backward compat)
+          qrString = json.qr_string || json.data?.qr_string || null;
+          paymentRef = json.reference || json.ref || json.transaction_id || json.data?.reference || null;
+        }
 
-        // Simpan ke order
-        if (qrisUrl || qrString || paymentRef) {
+        // Simpan referensi ke order
+        if (qrString || paymentRef) {
           await serviceSupabase.from('orders').update({
-            qris_url: qrisUrl,
             payment_ref: paymentRef,
           }).eq('id', order.id);
         }
@@ -128,10 +137,10 @@ export async function POST(req: Request) {
   return NextResponse.json({
     orderId: order.id,
     orderCode: order.order_code,
-    qrisUrl,
     qrString,
+    totalPayment,
     testMode,
     amount: Number(amount),
-    expiresAt: expiresAt.toISOString(),
+    expiresAt: pakasirExpiresAt || expiresAt.toISOString(),
   });
 }

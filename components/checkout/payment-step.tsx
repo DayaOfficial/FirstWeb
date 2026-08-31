@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Timer, Download, RefreshCw, HelpCircle, QrCode, CheckCircle2, XCircle, Loader2, AlertCircle, Ban, FlaskConical } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
+import QRCode from 'qrcode';
 
 interface PaymentStepProps {
   orderId: string | null;
@@ -11,18 +12,39 @@ interface PaymentStepProps {
   qrString?: string | null;
   testMode?: boolean;
   amount: number;
+  totalPayment?: number;
   productName: string;
+  expiresAt?: string | null;
 }
 
-export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amount, productName }: PaymentStepProps) {
-  const EXPIRE_SECONDS = 10 * 60; // 10 menit
-  const [timeLeft, setTimeLeft] = useState(EXPIRE_SECONDS);
+export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amount, totalPayment, productName, expiresAt }: PaymentStepProps) {
+  const EXPIRE_SECONDS = 10 * 60; // 10 menit default
+  const [timeLeft, setTimeLeft] = useState(() => {
+    if (expiresAt) {
+      const diff = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
+      return Math.max(0, diff);
+    }
+    return EXPIRE_SECONDS;
+  });
   const [status, setStatus] = useState<'waiting' | 'success' | 'failed' | 'expired' | 'canceled'>('waiting');
   const [verifying, setVerifying] = useState(false);
   const [verifyMsg, setVerifyMsg] = useState('');
   const [cooldown, setCooldown] = useState(0);
   const [canceling, setCanceling] = useState(false);
   const [simulating, setSimulating] = useState(false);
+
+  // QR string → gambar data URL
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (qrString) {
+      QRCode.toDataURL(qrString, { width: 280, margin: 2 })
+        .then(url => setQrDataUrl(url))
+        .catch(err => console.error('[QR] render error:', err));
+    }
+  }, [qrString]);
+
+  // Nominal yang ditampilkan: totalPayment dari Pakasir (termasuk fee), atau amount
+  const displayAmount = totalPayment || amount;
 
   // Timer countdown
   useEffect(() => {
@@ -81,16 +103,16 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
     setStatus('expired');
   }, [orderId]);
 
-  // Manual verification handler
+  // Verifikasi pembayaran — panggil verify API (Pakasir transactiondetail)
   const handleVerify = useCallback(async () => {
     if (!orderId || verifying || cooldown > 0 || status !== 'waiting') return;
     setVerifying(true);
     setVerifyMsg('');
     try {
-      const res = await fetch(`/api/orders/status?orderId=${orderId}`);
+      const res = await fetch(`/api/orders/verify?orderId=${orderId}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.payment_status === 'paid') {
+        if (data.paid) {
           setStatus('success');
           setVerifyMsg('');
         } else {
@@ -151,6 +173,16 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
     setSimulating(false);
   }, [orderId, simulating, status]);
 
+  // Download QR handler
+  const handleDownloadQR = useCallback(() => {
+    const src = qrDataUrl || qrisUrl;
+    if (!src) return;
+    const a = document.createElement('a');
+    a.href = src;
+    a.download = `QRIS-${orderId || 'payment'}.png`;
+    a.click();
+  }, [qrDataUrl, qrisUrl, orderId]);
+
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const isLow = timeLeft < 120;
@@ -183,7 +215,7 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
     );
   }
 
-  const hasQr = !!qrisUrl || !!qrString;
+  const hasQr = !!qrDataUrl || !!qrisUrl;
 
   return (
     <div className="max-w-lg mx-auto space-y-6 animate-fade-in">
@@ -221,7 +253,10 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
         </div>
 
         <div className="bg-white p-4 rounded-lg border-2 border-primary-container/20 shadow-inner mb-6">
-          {qrisUrl ? (
+          {/* Prioritas: QR dari string (dirender jadi gambar) → qrisUrl (gambar langsung) → placeholder */}
+          {qrDataUrl ? (
+            <img src={qrDataUrl} alt="QRIS" className="w-64 h-64 object-contain" />
+          ) : qrisUrl ? (
             <img src={qrisUrl} alt="QRIS" className="w-64 h-64 object-contain" />
           ) : testMode ? (
             <div className="w-64 h-64 bg-surface-container-high rounded flex items-center justify-center">
@@ -243,7 +278,7 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
 
         <div className="text-center w-full mb-6">
           <p className="text-xs text-on-surface-variant mb-1">Total Pembayaran</p>
-          <p className="text-3xl font-bold text-primary font-[family-name:var(--font-heading)]">{formatRupiah(amount)}</p>
+          <p className="text-3xl font-bold text-primary font-[family-name:var(--font-heading)]">{formatRupiah(displayAmount)}</p>
           <p className="text-xs text-on-surface-variant mt-1">{productName}</p>
         </div>
 
@@ -270,7 +305,10 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
 
           <div className="flex flex-col sm:flex-row gap-3">
             {hasQr && (
-              <button className="flex-1 py-3 px-6 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2">
+              <button
+                onClick={handleDownloadQR}
+                className="flex-1 py-3 px-6 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2"
+              >
                 <Download size={16} /> Simpan QR Code
               </button>
             )}
