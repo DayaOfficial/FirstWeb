@@ -91,10 +91,15 @@ export async function updateSession(request: NextRequest) {
     // Owner selalu bisa akses
     if (role !== 'owner') {
       let userStatus: string | undefined;
+      let profileFetchOk = false;
 
       // Direct fetch ke Supabase REST API dengan service role key (bypass RLS, reliable di Edge)
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
       if (serviceKey && supabaseUrl) {
+        // Timeout 3 detik agar tidak hang di Edge Runtime
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+
         try {
           const res = await fetch(
             `${supabaseUrl}/rest/v1/profiles?select=status,role&id=eq.${user.id}&limit=1`,
@@ -105,12 +110,16 @@ export async function updateSession(request: NextRequest) {
                 'Accept': 'application/json',
               },
               cache: 'no-store',
+              signal: controller.signal,
             }
           );
+          clearTimeout(timeoutId);
+
           if (res.ok) {
             const profiles = await res.json();
             const profile = profiles?.[0];
             if (profile) {
+              profileFetchOk = true;
               // Owner di profiles juga bisa akses
               if (profile.role === 'owner') {
                 return supabaseResponse;
@@ -119,16 +128,20 @@ export async function updateSession(request: NextRequest) {
             }
           }
         } catch (e) {
-          console.error('[middleware] profile fetch error:', e);
+          clearTimeout(timeoutId);
+          // Fail-open: jika fetch timeout/error, izinkan akses (jangan blokir user)
+          console.error('[middleware] profile fetch error (fail-open):', e);
+          return supabaseResponse;
         }
       }
 
-      const finalStatus = userStatus || 'pending';
-      // Hanya 'active' dan 'approved' yang boleh masuk. Blocked/pending/rejected → redirect
-      if (finalStatus !== 'active' && finalStatus !== 'approved') {
-        const url = request.nextUrl.clone();
-        url.pathname = finalStatus === 'blocked' ? '/pending' : '/pending';
-        return NextResponse.redirect(url);
+      // Hanya blokir jika profile fetch berhasil dan status bukan active/approved
+      if (profileFetchOk && userStatus) {
+        if (userStatus !== 'active' && userStatus !== 'approved') {
+          const url = request.nextUrl.clone();
+          url.pathname = '/pending';
+          return NextResponse.redirect(url);
+        }
       }
     }
   }
