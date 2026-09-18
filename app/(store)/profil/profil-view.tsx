@@ -84,6 +84,7 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
   const [searchQuery, setSearchQuery] = useState('');
   const [showCount, setShowCount] = useState(10);
   const [uploading, setUploading] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Password change modal state
@@ -341,30 +342,74 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
               : new Date(new Date(order.created_at).getTime() + 15 * 60 * 1000);
             const isExpired = new Date() > expiresAt;
             const canResume = isPending && !isExpired;
+            const isExpanded = expandedOrderId === order.id;
 
             return (
-              <div key={order.id} className="p-4 hover:bg-surface-container-low transition-colors">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-on-surface-variant font-mono">{order.order_code}</p>
-                    <p className="text-sm font-semibold text-on-surface truncate">{order.product_name || 'Produk'}</p>
-                    <p className="text-xs text-on-surface-variant mt-0.5">{formatDate(order.created_at)}</p>
+              <div key={order.id}>
+                <button
+                  onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                  className="w-full p-4 hover:bg-surface-container-low transition-colors text-left"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-on-surface-variant font-mono">{order.order_code}</p>
+                      <p className="text-sm font-semibold text-on-surface truncate">{order.product_name || 'Produk'}</p>
+                      <p className="text-xs text-on-surface-variant mt-0.5">{formatDate(order.created_at)}</p>
+                    </div>
+                    <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                      <p className="text-sm font-bold text-on-surface font-[family-name:var(--font-heading)]">{formatRupiah(order.amount)}</p>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold border ${getStatusStyle(order.process_status)}`}>
+                        {getStatusLabel(order.process_status)}
+                      </span>
+                      <ChevronRight size={16} className={`text-on-surface-variant transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                    <p className="text-sm font-bold text-on-surface font-[family-name:var(--font-heading)]">{formatRupiah(order.amount)}</p>
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold border ${getStatusStyle(order.process_status)}`}>
-                      {getStatusLabel(order.process_status)}
-                    </span>
+                </button>
+
+                {/* Detail Panel */}
+                {isExpanded && (
+                  <div className="px-4 pb-4 space-y-3 animate-fade-in border-t border-outline-variant/20 bg-surface-container-low/50">
+                    <div className="grid grid-cols-2 gap-3 pt-3">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Kode Pesanan</p>
+                        <p className="text-xs font-mono font-semibold text-on-surface">{order.order_code}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Modul</p>
+                        <p className="text-xs font-semibold text-on-surface capitalize">{order.module || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Status Pembayaran</p>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusStyle(order.payment_status)}`}>
+                          {getStatusLabel(order.payment_status)}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Status Proses</p>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusStyle(order.process_status)}`}>
+                          {getStatusLabel(order.process_status)}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Total</p>
+                        <p className="text-sm font-bold text-primary font-[family-name:var(--font-heading)]">{formatRupiah(order.amount)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Tanggal</p>
+                        <p className="text-xs font-semibold text-on-surface">{formatDate(order.created_at)}</p>
+                      </div>
+                    </div>
+
+                    {canResume && (
+                      <Link
+                        href={`/pembayaran/${order.id}`}
+                        className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full gradient-primary text-white text-sm font-semibold shadow-md hover:opacity-90 transition-all"
+                      >
+                        <Clock size={16} />
+                        Lanjutkan Pembayaran
+                      </Link>
+                    )}
                   </div>
-                </div>
-                {canResume && (
-                  <Link
-                    href={`/pembayaran/${order.id}`}
-                    className="mt-3 w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full gradient-primary text-white text-xs font-semibold shadow-sm hover:opacity-90 transition-all animate-fade-in"
-                  >
-                    <Clock size={14} />
-                    Lanjutkan Pembayaran
-                  </Link>
                 )}
               </div>
             );
