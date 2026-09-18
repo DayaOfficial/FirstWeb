@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   ChevronRight, User, LayoutDashboard, KeyRound, LogOut,
   Search, Filter, Camera, Trash2, Package, Loader2,
-  Eye, EyeOff, X, CheckCircle2, AlertCircle, ShieldCheck
+  Eye, EyeOff, X, CheckCircle2, AlertCircle, ShieldCheck, Clock
 } from 'lucide-react';
 import { formatRupiah, formatDate } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -30,6 +30,7 @@ interface OrderRow {
   payment_status: string;
   process_status: string;
   created_at: string;
+  expires_at?: string;
 }
 
 const MODULES = [
@@ -333,21 +334,41 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
 
         {/* Order List */}
         <div className="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-soft overflow-hidden divide-y divide-outline-variant/30">
-          {visibleOrders.map(order => (
-            <div key={order.id} className="p-4 hover:bg-surface-container-low transition-colors flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-on-surface-variant font-mono">{order.order_code}</p>
-                <p className="text-sm font-semibold text-on-surface truncate">{order.product_name || 'Produk'}</p>
-                <p className="text-xs text-on-surface-variant mt-0.5">{formatDate(order.created_at)}</p>
+          {visibleOrders.map(order => {
+            const isPending = order.payment_status === 'pending';
+            const expiresAt = order.expires_at
+              ? new Date(order.expires_at)
+              : new Date(new Date(order.created_at).getTime() + 15 * 60 * 1000);
+            const isExpired = new Date() > expiresAt;
+            const canResume = isPending && !isExpired;
+
+            return (
+              <div key={order.id} className="p-4 hover:bg-surface-container-low transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-on-surface-variant font-mono">{order.order_code}</p>
+                    <p className="text-sm font-semibold text-on-surface truncate">{order.product_name || 'Produk'}</p>
+                    <p className="text-xs text-on-surface-variant mt-0.5">{formatDate(order.created_at)}</p>
+                  </div>
+                  <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                    <p className="text-sm font-bold text-on-surface font-[family-name:var(--font-heading)]">{formatRupiah(order.amount)}</p>
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold border ${getStatusStyle(order.process_status)}`}>
+                      {getStatusLabel(order.process_status)}
+                    </span>
+                  </div>
+                </div>
+                {canResume && (
+                  <Link
+                    href={`/pembayaran/${order.id}`}
+                    className="mt-3 w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full gradient-primary text-white text-xs font-semibold shadow-sm hover:opacity-90 transition-all animate-fade-in"
+                  >
+                    <Clock size={14} />
+                    Lanjutkan Pembayaran
+                  </Link>
+                )}
               </div>
-              <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                <p className="text-sm font-bold text-on-surface font-[family-name:var(--font-heading)]">{formatRupiah(order.amount)}</p>
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-semibold border ${getStatusStyle(order.process_status)}`}>
-                  {getStatusLabel(order.process_status)}
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {visibleOrders.length === 0 && (

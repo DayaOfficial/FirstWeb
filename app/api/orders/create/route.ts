@@ -88,8 +88,13 @@ export async function POST(req: Request) {
   //   response: { payment: { payment_number: "QR_STRING", expired_at, ... } }
   //   Render QR string menjadi gambar adalah tanggung jawab merchant (frontend)
 
-  const testSettings = await getSettings(['test_mode']);
-  const testMode = testSettings.test_mode === 'true';
+  // Test mode HANYA untuk owner — member selalu pakai Pakasir production
+  const userRole = user.user_metadata?.role;
+  let testMode = false;
+  if (userRole === 'owner') {
+    const testSettings = await getSettings(['test_mode']);
+    testMode = testSettings.test_mode === 'true';
+  }
 
   let qrString: string | null = null;
   let pakasirExpiresAt: string | null = null;
@@ -131,9 +136,11 @@ export async function POST(req: Request) {
           qrString = payment.payment_number;
           pakasirExpiresAt = payment.expired_at || null;
 
-          // Simpan referensi ke order
+          // Simpan QR string + referensi ke order agar bisa di-resume
           await serviceSupabase.from('orders').update({
             payment_ref: orderCode,
+            qris_url: qrString,
+            ...(pakasirExpiresAt ? { expires_at: pakasirExpiresAt } : {}),
           }).eq('id', order.id);
 
           console.log('[Pakasir] ✅ QR String diterima, panjang:', qrString!.length);
