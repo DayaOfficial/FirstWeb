@@ -187,13 +187,60 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
   const seconds = timeLeft % 60;
   const isLow = timeLeft < 120;
 
+  // Fetch owner WA when payment succeeds
+  const [ownerWa, setOwnerWa] = useState('');
+  const [formatCopied, setFormatCopied] = useState(false);
+  useEffect(() => {
+    if (status === 'success') {
+      fetch('/api/store/contact')
+        .then(r => r.ok ? r.json() : {})
+        .then((s: any) => setOwnerWa(s.owner_wa || '087800001232'))
+        .catch(() => {});
+    }
+  }, [status]);
+
+  const formatText = `Halo kak, saya sudah bayar untuk:\n📦 Produk: ${productName}\n💰 Total: Rp ${displayAmount.toLocaleString('id-ID')}\n🆔 Order ID: ${orderId || '-'}\n\nMohon diproses ya, terima kasih! 🙏`;
+
+  const waLink = ownerWa
+    ? `https://wa.me/${ownerWa.replace(/^0/, '62').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(formatText)}`
+    : '';
+
   if (status === 'success') {
     return (
-      <div className="max-w-md mx-auto text-center py-12 animate-fade-in">
-        <CheckCircle2 size={64} className="mx-auto mb-4 text-accent-green" />
+      <div className="max-w-md mx-auto text-center py-12 animate-fade-in space-y-6">
+        <CheckCircle2 size={64} className="mx-auto mb-2 text-accent-green" />
         <h2 className="text-xl font-bold text-on-surface font-[family-name:var(--font-heading)]">Pembayaran Berhasil!</h2>
-        <p className="text-sm text-on-surface-variant mt-2">Pesanan Anda sedang diproses. Cek riwayat transaksi di profil.</p>
-        <Link href="/profil" className="inline-flex mt-6 px-6 py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all">
+        <p className="text-sm text-on-surface-variant">Pesanan Anda sedang diproses. Kirim format pembelian ke owner untuk mempercepat proses.</p>
+
+        {/* Format Text Box */}
+        <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 text-left">
+          <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-2 font-semibold">Format Pembelian</p>
+          <pre className="text-sm text-on-surface whitespace-pre-wrap font-sans leading-relaxed">{formatText}</pre>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(formatText);
+              setFormatCopied(true);
+              setTimeout(() => setFormatCopied(false), 2000);
+            }}
+            className="mt-3 text-xs font-semibold text-primary hover:underline"
+          >
+            {formatCopied ? '✅ Tersalin!' : '📋 Salin Teks'}
+          </button>
+        </div>
+
+        {/* WA Button */}
+        {waLink && (
+          <a
+            href={waLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-[#25D366] text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all"
+          >
+            💬 Kirim ke WhatsApp Owner
+          </a>
+        )}
+
+        <Link href="/profil" className="inline-flex px-6 py-3 rounded-full border-2 border-primary text-primary font-semibold text-sm hover:bg-primary/5 transition-all">
           Lihat Riwayat Transaksi
         </Link>
       </div>

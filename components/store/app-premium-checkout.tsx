@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCheckout } from '@/hooks/use-checkout';
 import ConfirmationStep from '@/components/checkout/confirmation-step';
 import PaymentStep from '@/components/checkout/payment-step';
 import { formatRupiah } from '@/lib/utils';
 import { ChevronRight, Crown, Package } from 'lucide-react';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 
 interface PlanItem {
   id: string;
@@ -42,15 +43,22 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
   const { state, actions, go } = useCheckout({ name: 'App Premium', needs_target: false });
   const [selectedApp, setSelectedApp] = useState<AppItem | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<PlanItem | null>(null);
-  const [buyerName, setBuyerName] = useState('');
-  const [buyerWA, setBuyerWA] = useState('');
 
-  // Step flow: app -> plan -> confirm -> payment
+  // Auto-load username dari akun user
+  const [username, setUsername] = useState('');
+  useEffect(() => {
+    (async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const name = user.user_metadata?.username || user.email?.split('@')[0] || 'User';
+        setUsername(name);
+      }
+    })();
+  }, []);
+
   const [step, setStep] = useState<'app' | 'plan' | 'confirm' | 'payment'>('app');
-
   const price = selectedPlan?.price || 0;
-
-  // Group apps by brand (category)
   const brands = [...new Set(apps.map(a => a.brand || 'Lainnya'))];
 
   return (
@@ -128,7 +136,7 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
         </section>
       )}
 
-      {/* Step 2: Pilih Plan */}
+      {/* Step 2: Pilih Plan (tanpa input nama/WA — otomatis dari akun) */}
       {step === 'plan' && selectedApp && (
         <section className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 shadow-soft max-w-lg">
           <StepTitle n={2} title="Pilih Plan" />
@@ -177,13 +185,10 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
 
           {selectedPlan && (
             <div className="space-y-3 mt-4 pt-4 border-t border-outline-variant/30">
-              <input value={buyerName} onChange={e => setBuyerName(e.target.value)}
-                placeholder="Nama Anda"
-                className="w-full px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
-
-              <input value={buyerWA} onChange={e => setBuyerWA(e.target.value)}
-                placeholder="No. WhatsApp (untuk pengiriman akun)"
-                className="w-full px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
+              <div className="p-3 rounded-xl bg-surface-container-high flex justify-between text-sm">
+                <span className="text-on-surface-variant">Pembeli</span>
+                <span className="font-semibold text-on-surface">{username}</span>
+              </div>
 
               <div className="p-3 rounded-xl bg-surface-container-high flex justify-between text-sm">
                 <span className="text-on-surface-variant">Total</span>
@@ -191,10 +196,8 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
               </div>
 
               <button
-                disabled={!buyerName.trim() || !buyerWA.trim()}
                 onClick={() => {
-                  actions.setField('buyerName', buyerName);
-                  actions.setField('buyerPhone', buyerWA);
+                  actions.setField('buyerName', username);
                   go({
                     nominal: {
                       id: selectedApp.id,
@@ -202,12 +205,12 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
                       price,
                       price_sell: price,
                     },
-                    targetInput: `${buyerName} (${buyerWA})`,
+                    targetInput: username,
                     product: { name: selectedApp.name },
                   });
                   setStep('confirm');
                 }}
-                className="w-full py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all disabled:opacity-40"
+                className="w-full py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all"
               >
                 Lanjut Konfirmasi
               </button>
@@ -228,7 +231,7 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
               price,
               price_sell: price,
             },
-            targetInput: `${buyerName} (${buyerWA})`,
+            targetInput: username,
           }}
           onConfirm={async () => {
             setStep('payment');
@@ -239,10 +242,9 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
                 body: JSON.stringify({
                   product_id: selectedApp?.id,
                   product_name: `${selectedApp?.name} — ${selectedPlan?.name}`,
-                  target_input: buyerWA,
+                  target_input: username,
                   amount: price,
-                  buyer_name: buyerName,
-                  buyer_phone: buyerWA,
+                  buyer_name: username,
                 }),
               });
               const data = await res.json();
@@ -251,7 +253,11 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
                 setStep('confirm');
                 return;
               }
-              go({ orderId: data.orderId, qrisUrl: data.qrisUrl });
+              go({
+                orderId: data.orderId,
+                qrString: data.qrString || null,
+                testMode: data.testMode || false,
+              });
             } catch {
               alert('Gagal: Kesalahan jaringan');
               setStep('confirm');

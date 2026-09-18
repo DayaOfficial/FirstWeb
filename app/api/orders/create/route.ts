@@ -32,6 +32,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Jumlah pembayaran tidak valid' }, { status: 400 });
   }
 
+  if (amount < 500) {
+    return NextResponse.json({ error: 'Minimum pembayaran QRIS adalah Rp 500' }, { status: 400 });
+  }
+
   const serviceSupabase = createServiceClient();
   const orderCode = generateOrderCode();
 
