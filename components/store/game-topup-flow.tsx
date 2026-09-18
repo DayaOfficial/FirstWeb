@@ -183,6 +183,8 @@ export default function GameTopUpFlow({ game, nominals, inputSchema }: GameTopUp
         <PaymentStep
           orderId={state.orderId}
           qrisUrl={state.qrisUrl}
+          qrString={state.qrString}
+          testMode={state.testMode}
           amount={state.nominal?.price_sell || state.nominal?.price || 0}
           productName={`${game.name} — ${state.nominal?.name}`}
         />

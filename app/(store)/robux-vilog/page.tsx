@@ -190,6 +190,8 @@ export default function RobuxVilogPage() {
         <PaymentStep
           orderId={state.orderId}
           qrisUrl={state.qrisUrl}
+          qrString={state.qrString}
+          testMode={state.testMode}
           amount={price}
           productName={`Robux Vilog — ${selected?.name}`}
         />

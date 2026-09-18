@@ -218,6 +218,8 @@ export default function SMMCheckout({ services }: SMMCheckoutProps) {
         <PaymentStep
           orderId={state.orderId}
           qrisUrl={state.qrisUrl}
+          qrString={state.qrString}
+          testMode={state.testMode}
           amount={totalPrice}
           productName={state.nominal?.name || 'SMM'}
         />

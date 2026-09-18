@@ -196,6 +196,8 @@ export default function ProductCheckoutFlow({
         <PaymentStep
           orderId={state.orderId}
           qrisUrl={state.qrisUrl}
+          qrString={state.qrString}
+          testMode={state.testMode}
           amount={state.nominal?.price_sell || state.nominal?.price || 0}
           productName={state.nominal?.name || category}
         />
