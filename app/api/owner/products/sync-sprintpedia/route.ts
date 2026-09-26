@@ -8,7 +8,13 @@ export const maxDuration = 60;
 const PLATFORM_KEYWORDS = [
   'instagram', 'tiktok', 'youtube', 'facebook', 'twitter',
   'telegram', 'spotify', 'threads', 'shopee', 'snackvideo',
-  'linkedin', 'twitch', 'discord', 'pinterest',
+  'linkedin', 'twitch', 'discord', 'pinterest', 'google',
+  'whatsapp', 'website', 'roblox', 'soundcloud', 'twitterx',
+  'snapchat', 'reddit', 'quora', 'wechat', 'line',
+  'tumblr', 'vimeo', 'dailymotion', 'likee', 'kwai',
+  'clubhouse', 'reverbnation', 'mixcloud', 'audiomack',
+  'deezer', 'apple music', 'shazam', 'napster',
+  'tokopedia', 'lazada', 'bukalapak', 'gmail',
 ];
 
 function platformOf(name: string, category: string): string {

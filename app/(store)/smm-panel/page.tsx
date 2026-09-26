@@ -2,16 +2,14 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { formatRupiah } from '@/lib/utils';
 import { useCheckout } from '@/hooks/use-checkout';
-import PaymentStep from '@/components/checkout/payment-step';
+import { formatRupiah } from '@/lib/utils';
 import {
-  ChevronRight, Share2, ShoppingCart, Info, Gauge, BadgeCheck,
-  ArrowDown, ArrowUp, Loader2, Globe,
+  Search, Globe, ChevronDown, RotateCcw, ShoppingCart, Loader2,
+  ExternalLink, Info, Hash, Zap,
 } from 'lucide-react';
-import Link from 'next/link';
 
-/* ── Interface produk SMM ── */
+/* ===== TYPES ===== */
 interface SMMProduct {
   id: string;
   name: string;
@@ -23,388 +21,439 @@ interface SMMProduct {
   max_qty: number;
   smm_category: string;
   platform_icon_url: string | null;
+  is_refillable?: boolean;
+  refill_days?: number;
+  service_type?: string;
 }
 
-/* ── Komponen kartu langkah ── */
-function StepCard({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl bg-surface-container-lowest border border-outline-variant/30 p-6 shadow-soft">
-      <h3 className="font-bold mb-4 flex items-center gap-3 text-on-surface font-[family-name:var(--font-heading)]">
-        <span className="w-8 h-8 rounded-full gradient-primary text-white flex items-center justify-center text-sm font-bold shrink-0">
-          {n}
-        </span>
-        {title}
-      </h3>
-      {children}
-    </div>
-  );
-}
+/* ===== PLATFORM ICONS (emoji fallback) ===== */
+const PLATFORM_ICONS: Record<string, string> = {
+  'All': '📋',
+  'Instagram': '📸',
+  'Facebook': '👤',
+  'Youtube': '▶️',
+  'Twitter': '🐦',
+  'Tiktok': '🎵',
+  'Spotify': '🎧',
+  'Telegram': '✈️',
+  'Google': '🔍',
+  'Twitch': '🎮',
+  'Discord': '💬',
+  'Website': '🌐',
+  'Whatsapp': '📱',
+  'Shopee': '🛒',
+  'Threads': '🧵',
+  'Linkedin': '💼',
+  'Pinterest': '📌',
+  'Snackvideo': '🎬',
+  'Roblox': '🎯',
+  'Soundcloud': '☁️',
+  'Reddit': '🤖',
+  'Snapchat': '👻',
+  'Line': '💚',
+  'Gmail': '📧',
+  'Tokopedia': '🛍️',
+  'Lazada': '🏪',
+  'Lainnya': '⚡',
+};
 
-/* ── Baris ringkasan ── */
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between text-sm py-1.5">
-      <span className="text-on-surface-variant">{label}</span>
-      <span className="font-medium text-on-surface">{value}</span>
-    </div>
-  );
-}
-
-/* ── Ikon platform: gunakan icon_url dari DB jika ada, fallback ke lucide Globe ── */
-function PlatformIcon({ iconUrl, name, size = 32 }: { iconUrl?: string | null; name: string; size?: number }) {
-  if (iconUrl) {
-    return (
-      <img
-        src={iconUrl}
-        alt={name}
-        className="object-contain"
-        style={{ width: size, height: size }}
-        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-      />
-    );
-  }
-  return <Globe size={size} />;
-}
-
-/* ===== HALAMAN UTAMA ===== */
+/* ===== PAGE ===== */
 export default function SMMPanelPage() {
   const supabase = createClient();
   const { state, go } = useCheckout({ name: 'SMM Panel', needs_target: false });
 
+  // Data
   const [products, setProducts] = useState<SMMProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Form state
-  const [platform, setPlatform] = useState<string | null>(null);
-  const [service, setService] = useState<SMMProduct | null>(null);
-  const [target, setTarget] = useState('');
-  const [qty, setQty] = useState(1000);
+  // Filters
+  const [activePlatform, setActivePlatform] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedServiceId, setSelectedServiceId] = useState('');
 
-  // Checkout state
-  const [checkoutPhase, setCheckoutPhase] = useState<'form' | 'payment'>('form');
+  // Order form
+  const [target, setTarget] = useState('');
+  const [quantity, setQuantity] = useState('');
   const [ordering, setOrdering] = useState(false);
 
   // Load produk SMM
   useEffect(() => {
     (async () => {
-      const mapData = (list: any[]) => list.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        brand: p.brand ?? 'Lainnya',
-        price_sell: Number(p.price_sell),
-        provider_code: p.provider_code ?? '',
-        description: p.description ?? '',
-        min_qty: Number(p.min_qty) || 10,
-        max_qty: Number(p.max_qty) || 100000,
-        smm_category: p.smm_category ?? '',
-        platform_icon_url: p.platform_icon_url ?? null,
-      }));
-
-      // Try 1: direct Supabase query (works if RLS allows)
-      const { data, error } = await supabase
+      // Try direct Supabase first
+      const { data } = await supabase
         .from('products')
-        .select('id, name, brand, price_sell, provider_code, description, min_qty, max_qty, smm_category, platform_icon_url')
+        .select('id, name, brand, price_sell, provider_code, description, min_qty, max_qty, smm_category, platform_icon_url, is_refillable, refill_days, service_type')
         .eq('module', 'sprintpedia')
         .order('brand', { ascending: true });
 
-      if (!error && data && data.length > 0) {
-        setProducts(mapData(data));
+      if (data && data.length > 0) {
+        setProducts(data as SMMProduct[]);
         setLoading(false);
         return;
       }
 
-      // Try 2: fallback to API route (server-side, bypass RLS)
+      // Fallback: API route
       try {
         const res = await fetch('/api/store/smm-services');
         const json = await res.json();
-        if (json.services?.length > 0) {
-          setProducts(mapData(json.services));
-        }
-      } catch (err: any) {
-        console.error('[SMM] load error:', err.message);
-      }
+        setProducts((json.services || []) as SMMProduct[]);
+      } catch { /* silent */ }
       setLoading(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Daftar platform unik + ambil icon_url pertama yang ditemukan per platform
-  const platformsData = useMemo(() => {
-    const map = new Map<string, string | null>();
-    for (const p of products) {
-      if (!map.has(p.brand)) {
-        map.set(p.brand, p.platform_icon_url);
-      }
-      // Update icon jika ada yang punya icon dan yang sebelumnya null
-      if (!map.get(p.brand) && p.platform_icon_url) {
-        map.set(p.brand, p.platform_icon_url);
-      }
-    }
-    return Array.from(map.entries()).map(([name, iconUrl]) => ({ name, iconUrl }));
+  // === Derived data ===
+
+  // Unique platforms
+  const platforms = useMemo(() => {
+    const set = new Set<string>();
+    products.forEach(p => set.add(p.brand));
+    return ['All', ...Array.from(set).sort()];
   }, [products]);
 
-  // Layanan yang sesuai platform terpilih
-  const filteredServices = useMemo(
-    () => products.filter((p) => p.brand === platform),
-    [products, platform]
-  );
+  // Products filtered by platform & search
+  const filteredByPlatform = useMemo(() => {
+    let list = products;
+    if (activePlatform !== 'All') {
+      list = list.filter(p => p.brand === activePlatform);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.provider_code.includes(q) ||
+        p.smm_category?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [products, activePlatform, searchQuery]);
 
-  // Min/max dari service terpilih
-  const min = service?.min_qty || 10;
-  const max = service?.max_qty || 100000;
-  const clampedQty = Math.min(max, Math.max(qty || min, min));
+  // Categories for the filtered products
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    filteredByPlatform.forEach(p => {
+      if (p.smm_category) set.add(p.smm_category);
+    });
+    return Array.from(set).sort();
+  }, [filteredByPlatform]);
 
-  // Harga total: (qty / 1000) × harga per 1K
-  const total = service ? Math.round((clampedQty / 1000) * service.price_sell) : 0;
+  // Services for the selected category
+  const services = useMemo(() => {
+    if (!selectedCategory) return filteredByPlatform;
+    return filteredByPlatform.filter(p => p.smm_category === selectedCategory);
+  }, [filteredByPlatform, selectedCategory]);
 
-  // Handler beli
-  async function handleBuy() {
-    if (!service || !target.trim()) return;
+  // Selected service object
+  const selectedService = useMemo(() => {
+    return products.find(p => p.id === selectedServiceId) || null;
+  }, [products, selectedServiceId]);
+
+  // Price calculation
+  const totalPrice = useMemo(() => {
+    if (!selectedService || !quantity) return 0;
+    const qty = parseInt(quantity) || 0;
+    // price_sell is per 1000
+    return Math.round((selectedService.price_sell / 1000) * qty);
+  }, [selectedService, quantity]);
+
+  // Reset form
+  const handleReset = () => {
+    setActivePlatform('All');
+    setSearchQuery('');
+    setSelectedCategory('');
+    setSelectedServiceId('');
+    setTarget('');
+    setQuantity('');
+  };
+
+  // When platform changes, reset category & service
+  const handlePlatformChange = (p: string) => {
+    setActivePlatform(p);
+    setSelectedCategory('');
+    setSelectedServiceId('');
+  };
+
+  // When category changes, reset service
+  const handleCategoryChange = (c: string) => {
+    setSelectedCategory(c);
+    setSelectedServiceId('');
+  };
+
+  // Submit order
+  const handleSubmit = async () => {
+    if (!selectedService || !target || !quantity) return;
+
+    const qty = parseInt(quantity) || 0;
+    if (qty < selectedService.min_qty || qty > selectedService.max_qty) {
+      alert(`Jumlah harus antara ${selectedService.min_qty.toLocaleString()} - ${selectedService.max_qty.toLocaleString()}`);
+      return;
+    }
+
     setOrdering(true);
     try {
-      const res = await fetch('/api/orders/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          product_id: service.id,
-          product_name: service.name,
-          target_input: target,
-          amount: total,
-          quantity: clampedQty,
-          nominal_code: service.provider_code,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        alert('Gagal membuat pesanan: ' + (data?.error || 'Unknown'));
-        setOrdering(false);
-        return;
-      }
       go({
-        orderId: data.orderId,
-        qrString: data.qrString,
-        testMode: data.testMode,
+        product: {
+          id: selectedService.id,
+          name: selectedService.name,
+          needs_target: true,
+          category: 'SMM',
+        },
+        nominal: {
+          id: selectedService.id,
+          name: selectedService.name,
+          price: totalPrice,
+          price_sell: totalPrice,
+          provider_code: selectedService.provider_code,
+        },
+        targetInput: target,
+        step: 'confirm' as const,
       });
-      setCheckoutPhase('payment');
-    } catch (err: any) {
-      alert('Gagal: Kesalahan jaringan');
-      console.error('[SMM] order error:', err);
+    } catch {
+      alert('Gagal membuat pesanan');
     }
     setOrdering(false);
-  }
+  };
 
-  // Loading
+  // === RENDER ===
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 size={32} className="animate-spin text-primary" />
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 size={40} className="animate-spin text-primary" />
       </div>
     );
   }
 
-  // Fase pembayaran
-  if (checkoutPhase === 'payment') {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <nav className="flex items-center gap-2 text-sm text-on-surface-variant">
-          <Link href="/" className="hover:text-primary transition-colors">Beranda</Link>
-          <ChevronRight size={14} />
-          <button className="hover:text-primary transition-colors" onClick={() => setCheckoutPhase('form')}>Sosial Media</button>
-          <ChevronRight size={14} />
-          <span className="text-primary font-semibold">Pembayaran</span>
-        </nav>
-
-        <PaymentStep
-          orderId={state.orderId}
-          qrisUrl={null}
-          qrString={state.qrString}
-          testMode={state.testMode}
-          amount={total}
-          productName={service?.name || 'SMM'}
-        />
-      </div>
-    );
-  }
-
-  // Fase form utama — sesuai referensi gambar
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-2 text-sm text-on-surface-variant">
-        <Link href="/" className="hover:text-primary transition-colors">Beranda</Link>
-        <ChevronRight size={14} />
-        <span className="text-primary font-semibold">Sosial Media</span>
-      </nav>
-
+    <div className="max-w-4xl mx-auto space-y-6 pb-12">
+      {/* Header */}
       <div>
+        <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-2">
+          <a href="/" className="hover:text-primary transition-colors">Beranda</a>
+          <span>›</span>
+          <span className="text-primary font-semibold">Sosial Media</span>
+        </div>
         <h1 className="text-2xl lg:text-3xl font-bold text-on-surface font-[family-name:var(--font-heading)]">
           Sosial Media (SMM Panel)
         </h1>
-        <p className="text-sm text-on-surface-variant mt-1">Buat pesanan baru untuk layanan sosial media.</p>
+        <p className="text-sm text-on-surface-variant mt-1">
+          Boost sosial media kamu — followers, likes, views, comments & lainnya.
+        </p>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* ══════════ FORM UTAMA (2 kolom) ══════════ */}
-        <div className="lg:col-span-2 space-y-6">
+      {/* ═══════ PLATFORM GRID ═══════ */}
+      <div className="bg-surface-container-lowest rounded-2xl p-4 shadow-soft border border-outline-variant/20">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          {platforms.map(p => (
+            <button
+              key={p}
+              onClick={() => handlePlatformChange(p)}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer
+                ${activePlatform === p
+                  ? 'bg-primary text-white shadow-md scale-[1.02]'
+                  : 'bg-surface-container-low text-on-surface hover:bg-primary/10 hover:text-primary border border-outline-variant/20'
+                }`}
+            >
+              <span className="text-base">{PLATFORM_ICONS[p] || '⚡'}</span>
+              <span className="truncate">{p}</span>
+              {activePlatform === p && p === 'All' && (
+                <span className="ml-auto text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full">
+                  {products.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
 
-          {/* ── Langkah 1: Pilih Kategori ── */}
-          <StepCard n={1} title="Pilih Kategori">
-            {platformsData.length === 0 ? (
-              <p className="text-center text-sm text-on-surface-variant py-6">
-                Belum ada layanan SMM. Owner perlu sync dari SprintPedia di panel.
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {platformsData.map((p) => {
-                  const isActive = platform === p.name;
-                  return (
-                    <button
-                      key={p.name}
-                      onClick={() => {
-                        setPlatform(p.name);
-                        setService(null);
-                        setQty(1000);
-                      }}
-                      className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all
-                        ${isActive
-                          ? 'border-primary bg-primary/5 text-primary shadow-sm'
-                          : 'border-outline-variant/30 hover:border-primary/40 text-on-surface-variant hover:text-on-surface'
-                        }`}
-                    >
-                      <PlatformIcon iconUrl={p.iconUrl} name={p.name} size={32} />
-                      <span className="text-sm font-semibold mt-2 capitalize">{p.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </StepCard>
+      {/* ═══════ FORM ═══════ */}
+      <div className="bg-surface-container-lowest rounded-2xl p-5 sm:p-6 shadow-soft border border-outline-variant/20 space-y-5">
 
-          {/* ── Langkah 2: Pilih Layanan ── */}
-          <StepCard n={2} title="Pilih Layanan">
-            <p className="text-xs text-on-surface-variant mb-2">Layanan Tersedia</p>
+        {/* Search */}
+        <div>
+          <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5 block">
+            Search
+          </label>
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Cari ID atau nama layanan..."
+              className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            />
+          </div>
+        </div>
+
+        {/* Category */}
+        <div>
+          <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5 block">
+            Category *
+          </label>
+          <div className="relative">
             <select
-              value={service?.id || ''}
-              disabled={!platform}
-              onChange={(e) => {
-                const found = filteredServices.find((s) => s.id === e.target.value);
-                setService(found || null);
-                if (found) setQty(found.min_qty);
-              }}
-              className="w-full px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all disabled:opacity-50"
+              value={selectedCategory}
+              onChange={e => handleCategoryChange(e.target.value)}
+              className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl py-3 px-4 pr-10 text-sm appearance-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+            >
+              <option value="">— Pilih kategori —</option>
+              {categories.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Service */}
+        <div>
+          <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5 block">
+            Service *
+          </label>
+          <div className="relative">
+            <select
+              value={selectedServiceId}
+              onChange={e => setSelectedServiceId(e.target.value)}
+              disabled={services.length === 0}
+              className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl py-3 px-4 pr-10 text-sm appearance-none focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer disabled:opacity-50"
             >
               <option value="">
-                {platform ? 'Pilih layanan…' : 'Pilih kategori terlebih dahulu'}
+                {services.length === 0 ? 'Pilih kategori terlebih dahulu' : '— Pilih layanan —'}
               </option>
-              {filteredServices.map((s) => (
+              {services.map(s => (
                 <option key={s.id} value={s.id}>
-                  {s.name} - {formatRupiah(s.price_sell)}/1K
+                  {s.provider_code} - {s.name} {s.is_refillable ? `~ Refill ${s.refill_days || ''}Days` : '~ No Refill'} ~ Min {s.min_qty.toLocaleString()} ~ Max {s.max_qty.toLocaleString()} - ({formatRupiah(s.price_sell)}/1K)
                 </option>
               ))}
             </select>
-          </StepCard>
-
-          {/* ── Langkah 3: Input Data ── */}
-          <StepCard n={3} title="Input Data">
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-on-surface">Link Target / Username</label>
-                <input
-                  value={target}
-                  onChange={(e) => setTarget(e.target.value)}
-                  placeholder="Contoh: https://instagram.com/username atau username"
-                  className="w-full mt-1.5 px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-on-surface">Jumlah (Quantity)</label>
-                <input
-                  type="number"
-                  value={clampedQty}
-                  min={min}
-                  max={max}
-                  step={100}
-                  onChange={(e) => setQty(Number(e.target.value))}
-                  className="w-full mt-1.5 px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                />
-              </div>
-            </div>
-          </StepCard>
-        </div>
-
-        {/* ══════════ SIDEBAR ══════════ */}
-        <div className="space-y-6">
-
-          {/* ── Ringkasan Pesanan ── */}
-          <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-6 shadow-soft sticky top-24">
-            <h3 className="font-bold text-on-surface mb-4 font-[family-name:var(--font-heading)]">
-              Ringkasan Pesanan
-            </h3>
-
-            <SummaryRow
-              label="Harga per 1.000"
-              value={service ? formatRupiah(service.price_sell) : '—'}
-            />
-            <SummaryRow
-              label="Jumlah Pesanan"
-              value={service ? clampedQty.toLocaleString('id-ID') : '—'}
-            />
-
-            <div className="border-t border-outline-variant/30 my-3" />
-
-            <div className="flex justify-between items-center">
-              <span className="font-semibold text-on-surface">Total Harga</span>
-              <span className="text-xl font-extrabold text-primary font-[family-name:var(--font-heading)]">
-                {formatRupiah(total)}
-              </span>
-            </div>
-
-            <button
-              disabled={!service || !target.trim() || ordering}
-              onClick={handleBuy}
-              className="w-full mt-5 py-3 rounded-xl gradient-primary text-white font-bold flex items-center justify-center gap-2 shadow-md hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {ordering ? (
-                <><Loader2 size={18} className="animate-spin" /> Memproses…</>
-              ) : (
-                <><ShoppingCart size={18} /> Beli Sekarang</>
-              )}
-            </button>
+            <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 pointer-events-none" />
           </div>
 
-          {/* ── Informasi Layanan ── */}
-          {service && (
-            <div className="rounded-2xl border border-outline-variant/30 bg-surface-container-lowest p-6 text-sm text-on-surface-variant space-y-3 shadow-soft animate-fade-in">
-              <h3 className="flex items-center gap-2 font-bold text-on-surface font-[family-name:var(--font-heading)]">
-                <Info size={16} className="text-primary" /> Informasi Layanan
-              </h3>
-
-              <div className="space-y-2">
-                <p className="flex items-start gap-2">
-                  <Gauge size={16} className="shrink-0 mt-0.5 text-primary/60" />
-                  <span><strong>Kecepatan:</strong> Lihat deskripsi layanan</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <BadgeCheck size={16} className="shrink-0 mt-0.5 text-primary/60" />
-                  <span><strong>Kualitas:</strong> {service.description || '—'}</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <ArrowDown size={16} className="shrink-0 mt-0.5 text-primary/60" />
-                  <span><strong>Minimal Pesan:</strong> {min.toLocaleString('id-ID')}</span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <ArrowUp size={16} className="shrink-0 mt-0.5 text-primary/60" />
-                  <span><strong>Maksimal Pesan:</strong> {max.toLocaleString('id-ID')}</span>
-                </p>
+          {/* Service description */}
+          {selectedService && (
+            <div className="mt-2 p-3 bg-primary/5 border border-primary/15 rounded-xl text-xs text-on-surface-variant space-y-1 animate-fade-in">
+              <div className="flex items-start gap-1.5">
+                <Info size={12} className="shrink-0 mt-0.5 text-primary" />
+                <span>{selectedService.description || 'Tidak ada deskripsi.'}</span>
               </div>
-
-              <div className="mt-3 p-3 rounded-xl bg-error/5 border border-error/20 text-error text-xs font-medium">
-                Pastikan akun tidak di-private saat proses berlangsung!
+              <div className="flex flex-wrap gap-3 pt-1">
+                <span className="inline-flex items-center gap-1">
+                  <Hash size={10} /> ID: <strong>{selectedService.provider_code}</strong>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Zap size={10} /> Min: <strong>{selectedService.min_qty.toLocaleString()}</strong>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Zap size={10} /> Max: <strong>{selectedService.max_qty.toLocaleString()}</strong>
+                </span>
+                {selectedService.is_refillable && (
+                  <span className="inline-flex items-center gap-1 text-green-600">
+                    ✅ Refill {selectedService.refill_days} Hari
+                  </span>
+                )}
               </div>
             </div>
           )}
         </div>
+
+        {/* Target */}
+        <div>
+          <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5 block">
+            Target *
+          </label>
+          <div className="relative">
+            <ExternalLink size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50" />
+            <input
+              type="url"
+              value={target}
+              onChange={e => setTarget(e.target.value)}
+              placeholder="Masukkan link target (contoh: https://instagram.com/...)"
+              className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            />
+          </div>
+        </div>
+
+        {/* Quantity + Price row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Quantity */}
+          <div>
+            <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5 block">
+              Quantity *
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={quantity}
+              onChange={e => {
+                const v = e.target.value.replace(/[^0-9]/g, '');
+                setQuantity(v);
+              }}
+              placeholder={selectedService ? `Min: ${selectedService.min_qty.toLocaleString()}` : '0'}
+              className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+            />
+            {selectedService && (
+              <div className="flex gap-2 mt-1.5">
+                <button
+                  onClick={() => setQuantity(String(selectedService.min_qty))}
+                  className="px-2.5 py-1 text-[10px] font-bold bg-surface-container-low border border-outline-variant/30 rounded-lg hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all"
+                >
+                  Min: {selectedService.min_qty.toLocaleString()}
+                </button>
+                <button
+                  onClick={() => setQuantity(String(selectedService.max_qty))}
+                  className="px-2.5 py-1 text-[10px] font-bold bg-surface-container-low border border-outline-variant/30 rounded-lg hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all"
+                >
+                  Max: {selectedService.max_qty.toLocaleString()}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Total Price */}
+          <div>
+            <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-1.5 block">
+              Total Harga
+            </label>
+            <div className="w-full bg-surface-container-low border border-outline-variant/30 rounded-xl py-3 px-4 text-sm">
+              <span className={`font-bold text-lg ${totalPrice > 0 ? 'text-primary' : 'text-on-surface-variant'}`}>
+                {formatRupiah(totalPrice)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={handleReset}
+            className="px-5 py-3 rounded-xl border border-outline-variant/30 text-sm font-semibold text-on-surface-variant hover:text-error hover:border-error/30 hover:bg-error/5 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            <RotateCcw size={14} /> Reset
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!selectedService || !target || !quantity || ordering || totalPrice <= 0}
+            className="flex-1 py-3 rounded-xl gradient-primary text-white text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-lg shadow-primary/20"
+          >
+            {ordering ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <ShoppingCart size={16} />
+            )}
+            {ordering ? 'Memproses...' : 'Beli Sekarang'}
+          </button>
+        </div>
       </div>
+
+      {/* Stats */}
+      {products.length > 0 && (
+        <div className="text-center text-xs text-on-surface-variant/60">
+          {products.length.toLocaleString()} layanan tersedia • {platforms.length - 1} platform • Powered by SprintPedia
+        </div>
+      )}
     </div>
   );
 }
