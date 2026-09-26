@@ -8,7 +8,7 @@ import {
 import { formatRupiah } from '@/lib/utils';
 
 interface BalanceData {
-  provider: 'digiflazz' | 'jokerpanel';
+  provider: 'digiflazz' | 'sprintpedia';
   balance: number;
   currency: string;
   error?: string;
@@ -16,12 +16,12 @@ interface BalanceData {
 
 const MIN_THRESHOLDS: Record<string, number> = {
   digiflazz: 100000,
-  jokerpanel: 50,
+  sprintpedia: 0, // SprintPedia shows service count, not monetary balance
 };
 
 const PROVIDER_LABELS: Record<string, string> = {
   digiflazz: 'Digiflazz',
-  jokerpanel: 'JokerPanel',
+  sprintpedia: 'SprintPedia',
 };
 
 export default function SaldoProviderPage() {
@@ -88,7 +88,7 @@ export default function SaldoProviderPage() {
             Saldo Provider
           </h1>
           <p className="text-sm text-on-surface-variant mt-1">
-            Pantau saldo deposit Digiflazz & JokerPanel secara real-time
+            Pantau saldo deposit Digiflazz & koneksi SprintPedia secara real-time
           </p>
         </div>
         <button
@@ -136,9 +136,9 @@ export default function SaldoProviderPage() {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold ${
-                      b.provider === 'digiflazz' ? 'bg-blue-600' : 'bg-purple-600'
+                      b.provider === 'digiflazz' ? 'bg-blue-600' : 'bg-emerald-600'
                     }`}>
-                      {b.provider === 'digiflazz' ? 'DF' : 'JP'}
+                      {b.provider === 'digiflazz' ? 'DF' : 'SP'}
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-on-surface">
@@ -210,7 +210,7 @@ export default function SaldoProviderPage() {
         <div className="text-center py-16 bg-surface-container-lowest rounded-xl border border-outline-variant/30">
           <Wallet size={48} className="mx-auto mb-4 text-on-surface-variant/30" />
           <p className="text-sm text-on-surface-variant font-semibold">Belum ada data saldo.</p>
-          <p className="text-xs text-on-surface-variant mt-1">Pastikan API key Digiflazz dan JokerPanel sudah dikonfigurasi.</p>
+          <p className="text-xs text-on-surface-variant mt-1">Pastikan API key Digiflazz dan SprintPedia sudah dikonfigurasi.</p>
         </div>
       )}
 

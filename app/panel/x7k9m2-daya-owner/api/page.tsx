@@ -41,23 +41,19 @@ const PROVIDERS: ProviderDef[] = [
     ],
   },
   {
-    id: 'jokerpanel',
-    name: 'JokerPanel',
+    id: 'sprintpedia',
+    name: 'SprintPedia',
     desc: 'SMM Panel Services',
-    badge: 'JP',
-    bgColor: 'bg-purple-100',
-    textColor: 'text-purple-600',
+    badge: 'SP',
+    bgColor: 'bg-emerald-100',
+    textColor: 'text-emerald-600',
     settingsMap: {
-      apiId: 'jokerpanel_api_id',
-      apiKey: 'jokerpanel_api_key',
-      relay: 'jokerpanel_relay',
-      relaySecret: 'jokerpanel_relay_secret',
+      apiKey: 'sprintpedia_api_key',
+      secretKey: 'sprintpedia_secret_key',
     },
     fields: [
-      { key: 'apiId', label: 'API ID', type: 'text', placeholder: 'Contoh: 11 (angka dari panel JokerPanel)' },
-      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Masukkan API Key JokerPanel' },
-      { key: 'relay', label: 'Relay URL (Opsional)', type: 'text', placeholder: 'http://IP_VPS:8080', helper: 'URL relay VPS ber-IP statis. Kosongkan untuk koneksi langsung ke JokerPanel.' },
-      { key: 'relaySecret', label: 'Relay Secret (Opsional)', type: 'password', placeholder: 'Secret untuk autentikasi relay', helper: 'Samakan dengan RELAY_SECRET di VPS.' },
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Masukkan API Key SprintPedia' },
+      { key: 'secretKey', label: 'Secret Key', type: 'password', placeholder: 'Masukkan Secret Key SprintPedia' },
     ],
   },
   {
@@ -90,7 +86,7 @@ export default function OwnerApiPage() {
   const [testing, setTesting] = useState<string | null>(null);
   const [configs, setConfigs] = useState<Record<string, ProviderConfig>>({
     digiflazz: { username: '', apiKey: '', nomorTujuan: '', kodeProduk: '' },
-    jokerpanel: { apiId: '', apiKey: '', relay: '', relaySecret: '' },
+    sprintpedia: { apiKey: '', secretKey: '' },
     pakasir: { slug: '', apiKey: '' },
   });
 
@@ -112,20 +108,20 @@ export default function OwnerApiPage() {
     setTesting(null);
   };
 
-  // Test JokerPanel connection (official API)
-  const handleDetectJoker = async () => {
-    setTesting('jokerpanel');
+  // Test SprintPedia connection
+  const handleTestSprintPedia = async () => {
+    setTesting('sprintpedia');
     setTestResult(null);
     try {
-      const res = await fetch('/api/owner/joker/detect', { method: 'POST' });
+      const res = await fetch('/api/owner/sprintpedia/test', { method: 'POST' });
       const data = await res.json();
       if (data.ok) {
-        setTestResult({ provider: 'jokerpanel', msg: `✅ Terhubung! Saldo: ${data.currency} ${Number(data.balance).toLocaleString('id-ID')}`, ok: true });
+        setTestResult({ provider: 'sprintpedia', msg: `✅ Terhubung! ${data.services} layanan tersedia.`, ok: true });
       } else {
-        setTestResult({ provider: 'jokerpanel', msg: `❌ ${data.error}`, ok: false });
+        setTestResult({ provider: 'sprintpedia', msg: `❌ ${data.error}`, ok: false });
       }
     } catch {
-      setTestResult({ provider: 'jokerpanel', msg: '❌ Kesalahan jaringan', ok: false });
+      setTestResult({ provider: 'sprintpedia', msg: '❌ Kesalahan jaringan', ok: false });
     }
     setTesting(null);
   };
@@ -372,13 +368,13 @@ export default function OwnerApiPage() {
                           Uji
                         </button>
                       )}
-                      {p.id === 'jokerpanel' && connected && (
+                      {p.id === 'sprintpedia' && connected && (
                         <button
-                          onClick={handleDetectJoker}
-                          disabled={testing === 'jokerpanel'}
-                          className="px-4 py-2.5 rounded-lg border border-purple-200 bg-purple-50 text-purple-700 text-sm font-semibold hover:bg-purple-100 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                          onClick={handleTestSprintPedia}
+                          disabled={testing === 'sprintpedia'}
+                          className="px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-semibold hover:bg-emerald-100 transition-all flex items-center gap-1.5 disabled:opacity-50"
                         >
-                          {testing === 'jokerpanel' ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                          {testing === 'sprintpedia' ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
                           Uji
                         </button>
                       )}

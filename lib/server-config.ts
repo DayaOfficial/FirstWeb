@@ -46,20 +46,15 @@ export async function getDigiflazz() {
 }
 
 /**
- * Get JokerPanel credentials (Official API format).
+ * Get SprintPedia credentials.
  * Source priority: Supabase settings → process.env
- * Auth: api_id (int) + api_key (string) — per jokerpanel.com/doc
+ * Auth: api_key + secret_key — no IP whitelist needed.
  */
-export async function getJoker() {
-  const m = await getSettings([
-    'jokerpanel_api_id', 'jokerpanel_api_key',
-    'jokerpanel_relay', 'jokerpanel_relay_secret',
-  ]);
+export async function getSprint() {
+  const m = await getSettings(['sprintpedia_api_key', 'sprintpedia_secret_key']);
   return {
-    apiId: Number(m.jokerpanel_api_id || process.env.JOKERPANEL_API_ID || 0),
-    apiKey: m.jokerpanel_api_key || process.env.JOKERPANEL_API_KEY || '',
-    relay: m.jokerpanel_relay || '',
-    relaySecret: m.jokerpanel_relay_secret || '',
+    apiKey: m.sprintpedia_api_key || process.env.SPRINTPEDIA_API_KEY || '',
+    secretKey: m.sprintpedia_secret_key || process.env.SPRINTPEDIA_SECRET_KEY || '',
   };
 }
 

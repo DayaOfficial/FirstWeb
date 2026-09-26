@@ -90,7 +90,7 @@ export default function SMMPanelPage() {
       const { data, error } = await supabase
         .from('products')
         .select('id, name, brand, price_sell, provider_code, description, min_qty, max_qty, smm_category, platform_icon_url')
-        .eq('module', 'jokerpanel')
+        .eq('module', 'sprintpedia')
         .eq('is_active', true)
         .order('brand', { ascending: true });
 
@@ -240,7 +240,7 @@ export default function SMMPanelPage() {
           <StepCard n={1} title="Pilih Kategori">
             {platformsData.length === 0 ? (
               <p className="text-center text-sm text-on-surface-variant py-6">
-                Belum ada layanan SMM. Owner perlu sync dari JokerPanel di panel.
+                Belum ada layanan SMM. Owner perlu sync dari SprintPedia di panel.
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

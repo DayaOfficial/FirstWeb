@@ -31,7 +31,7 @@ export default function SmmPanelOwnerPage() {
 
   const load = useCallback(async () => {
     const { data } = await sb.from('products').select('*')
-      .eq('module', 'jokerpanel')
+      .eq('module', 'sprintpedia')
       .order('brand').order('price_modal');
     setRows((data as SmmProduct[]) || []);
   }, []);
@@ -42,7 +42,7 @@ export default function SmmPanelOwnerPage() {
     setBusy(true);
     setSyncResult(null);
     try {
-      const res = await fetch('/api/owner/products/sync-jokerpanel', { method: 'POST' });
+      const res = await fetch('/api/owner/products/sync-sprintpedia', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         setSyncResult(`✅ ${data.synced} layanan disinkronkan`);
@@ -109,13 +109,13 @@ export default function SmmPanelOwnerPage() {
             <Share2 size={28} className="text-primary" /> SMM Panel
           </h2>
           <p className="text-sm text-on-surface-variant mt-1">
-            {rows.length} layanan · {rows.filter(r => r.is_active).length} aktif · Provider: JokerPanel
+            {rows.length} layanan · {rows.filter(r => r.is_active).length} aktif · Provider: SprintPedia
           </p>
         </div>
         <button onClick={sync} disabled={busy}
           className="flex items-center gap-2 px-5 py-2.5 rounded-full gradient-primary text-white text-sm font-semibold shadow-md hover:opacity-90 transition-all disabled:opacity-50">
           <RefreshCw size={16} className={busy ? 'animate-spin' : ''} />
-          {busy ? 'Menyinkronkan...' : 'Sinkronkan JokerPanel'}
+          {busy ? 'Menyinkronkan...' : 'Sinkronkan SprintPedia'}
         </button>
       </div>
 
@@ -137,7 +137,7 @@ export default function SmmPanelOwnerPage() {
 
       {platforms.length === 0 && (
         <div className="text-center py-16 text-on-surface-variant">
-          <p className="text-sm">Belum ada layanan. Klik &quot;Sinkronkan JokerPanel&quot; untuk menarik data.</p>
+          <p className="text-sm">Belum ada layanan. Klik &quot;Sinkronkan SprintPedia&quot; untuk menarik data.</p>
         </div>
       )}
 

@@ -29,7 +29,7 @@ const MODULE_OPTIONS = [
   { value: 'manual_robux', label: 'Robux Vilog' },
   { value: 'manual_nokos', label: 'Nokos' },
   { value: 'digiflazz', label: 'Digiflazz (Otomatis)' },
-  { value: 'jokerpanel', label: 'JokerPanel (Otomatis)' },
+  { value: 'sprintpedia', label: 'SprintPedia (Otomatis)' },
 ];
 
 export default function OwnerProdukPage() {

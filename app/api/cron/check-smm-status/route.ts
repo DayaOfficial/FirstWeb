@@ -1,27 +1,29 @@
 import { createServiceClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { getJoker } from '@/lib/server-config';
-import { jokerStatus } from '@/lib/joker';
+import { getSprint } from '@/lib/server-config';
+import { sprintStatusBulk } from '@/lib/sprintpedia';
 
 /**
  * GET /api/cron/check-smm-status
  *
- * Cron job: Cek status order SMM (JokerPanel) yang masih pending/processing.
+ * Cron job: Cek status order SMM (SprintPedia) yang masih pending/processing/partial.
  * Dilindungi oleh CRON_SECRET bearer token.
- * Jalankan setiap 5 menit via Vercel Cron atau scheduler lain.
+ * Jalankan setiap 15 menit via Vercel Cron atau scheduler lain.
+ *
+ * Menggunakan batch status check (max 100 ID per request) untuk efisiensi.
  */
 
-// Mapping status JokerPanel ke status lokal
-const STATUS_MAP: Record<string, string> = {
-  pending: 'pending',
-  processing: 'processing',
-  'in progress': 'processing',
-  completed: 'success',
-  canceled: 'canceled',
-  cancelled: 'canceled',
-  partial: 'partial',
-  refunded: 'canceled',
-};
+// Mapping status SprintPedia ke status lokal
+function mapStatus(s: string): string {
+  switch (s) {
+    case 'Pending':    return 'pending';
+    case 'Processing': return 'processing';
+    case 'Success':    return 'success';
+    case 'Partial':    return 'partial';
+    case 'Error':      return 'failed';
+    default:           return 'processing';
+  }
+}
 
 export async function GET(req: Request) {
   // Verifikasi cron secret
@@ -30,25 +32,25 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  const cfg = await getJoker();
-  if (!cfg.apiId || !cfg.apiKey) {
+  const cfg = await getSprint();
+  if (!cfg.apiKey || !cfg.secretKey) {
     return NextResponse.json({
       ok: false,
-      error: 'JokerPanel belum dikonfigurasi',
+      error: 'SprintPedia belum dikonfigurasi',
       checked: 0,
     });
   }
 
   const sb = createServiceClient();
 
-  // Ambil order SMM yang masih pending/processing dan punya provider_ref
+  // Ambil order SMM yang masih pending/processing/partial dan punya provider_ref
   const { data: orders, error } = await sb
     .from('orders')
     .select('id, provider_ref, process_status')
-    .eq('module', 'jokerpanel')
-    .in('process_status', ['pending', 'processing'])
+    .eq('module', 'sprintpedia')
+    .in('process_status', ['pending', 'processing', 'partial'])
     .not('provider_ref', 'is', null)
-    .limit(50); // Batch 50 per cron run
+    .limit(200) as { data: { id: string; provider_ref: string; process_status: string }[] | null; error: any };
 
   if (error || !orders) {
     return NextResponse.json({
@@ -58,36 +60,49 @@ export async function GET(req: Request) {
     });
   }
 
+  if (!orders.length) {
+    return NextResponse.json({ ok: true, checked: 0, updated: 0 });
+  }
+
+  const ids = orders.map(o => o.provider_ref);
   let updated = 0;
   let errors = 0;
 
-  for (const o of orders) {
+  // Batch max 100 IDs per request
+  for (let i = 0; i < ids.length; i += 100) {
     try {
-      const result = await jokerStatus(cfg, Number(o.provider_ref));
-      const rawStatus = (result.order_status || result.status || '').toLowerCase();
-      const newStatus = STATUS_MAP[rawStatus] || 'processing';
+      const batchIds = ids.slice(i, i + 100);
+      const res = await sprintStatusBulk(cfg, batchIds);
+      const statusMap = res.orders || {};
 
-      // Hanya update jika status berubah
-      if (newStatus !== o.process_status) {
-        const updateData: Record<string, unknown> = {
-          process_status: newStatus,
-        };
+      for (const o of orders.slice(i, i + 100)) {
+        const s = statusMap[o.provider_ref];
+        if (!s?.status) continue;
 
-        // Simpan metadata tambahan jika ada
-        if (result.start_count || result.remains) {
-          updateData.meta = {
-            smm_start_count: result.start_count,
-            smm_remains: result.remains,
-            smm_charge: result.charge,
-            smm_last_check: new Date().toISOString(),
+        const newStatus = mapStatus(s.status);
+
+        // Hanya update jika status berubah
+        if (newStatus !== o.process_status) {
+          const updateData: Record<string, unknown> = {
+            process_status: newStatus,
           };
-        }
 
-        await sb.from('orders').update(updateData).eq('id', o.id);
-        updated++;
+          // Simpan metadata tambahan jika ada
+          if (s.start_count || s.remains) {
+            updateData.meta = {
+              smm_start_count: s.start_count,
+              smm_remains: s.remains,
+              smm_charge: s.charge,
+              smm_last_check: new Date().toISOString(),
+            };
+          }
+
+          await sb.from('orders').update(updateData).eq('id', o.id);
+          updated++;
+        }
       }
     } catch (err: unknown) {
-      console.error(`[check-smm-status] Error checking order ${o.id}:`, err);
+      console.error(`[check-smm-status] Batch error at offset ${i}:`, err);
       errors++;
     }
   }

@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/server';
-import { getDigiflazzBalance, getJokerPanelBalance } from '@/lib/providers/balance';
+import { getDigiflazzBalance, getSprintPediaBalance } from '@/lib/providers/balance';
 import { NextResponse } from 'next/server';
 
 export async function GET(req: Request) {
@@ -41,8 +41,8 @@ export async function GET(req: Request) {
     });
   }
 
-  if (!provider || provider === 'jokerpanel') {
-    const j = await getJokerPanelBalance();
+  if (!provider || provider === 'sprintpedia') {
+    const j = await getSprintPediaBalance();
     results.push(j);
     // Simpan ke riwayat
     await serviceSupabase.from('provider_balances').insert({

@@ -69,8 +69,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Gagal update order' }, { status: 500 });
   }
 
-  // Jika order SMM (jokerpanel), trigger proses otomatis
-  if (order.module === 'jokerpanel') {
+  // Jika order SMM (sprintpedia), trigger proses otomatis
+  if (order.module === 'sprintpedia') {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`

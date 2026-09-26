@@ -1,14 +1,14 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { getJoker } from '@/lib/server-config';
-import { jokerOrder } from '@/lib/joker';
+import { getSprint } from '@/lib/server-config';
+import { sprintOrder } from '@/lib/sprintpedia';
 
 /**
  * POST /api/orders/submit-smm
  *
  * Dipanggil setelah pembayaran terkonfirmasi (oleh webhook atau manual).
- * Mengirim order SMM ke JokerPanel via POST /api/order,
- * lalu menyimpan provider_ref (order ID JokerPanel) ke tabel orders.
+ * Mengirim order SMM ke SprintPedia via POST /api/order,
+ * lalu menyimpan provider_ref (order ID SprintPedia) ke tabel orders.
  *
  * Body: { order_id: string }
  */
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   // Ambil order
   const { data: order, error: orderErr } = await sb
     .from('orders')
-    .select('id, module, product_id, buyer_input, target_input, quantity, process_status, provider_ref')
+    .select('id, module, product_id, buyer_input, target_input, quantity, process_status, provider_ref, meta')
     .eq('id', order_id)
     .single();
 
@@ -37,8 +37,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Order tidak ditemukan' }, { status: 404 });
   }
 
-  if (order.module !== 'jokerpanel') {
-    return NextResponse.json({ error: 'Order ini bukan SMM (JokerPanel)' }, { status: 400 });
+  if (order.module !== 'sprintpedia') {
+    return NextResponse.json({ error: 'Order ini bukan SMM (SprintPedia)' }, { status: 400 });
   }
 
   // Jangan kirim ulang jika sudah ada provider_ref
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     });
   }
 
-  // Ambil produk untuk mendapatkan provider_code (= JokerPanel service ID)
+  // Ambil produk untuk mendapatkan provider_code (= SprintPedia service ID)
   if (!order.product_id) {
     return NextResponse.json({ error: 'product_id tidak ada di order ini' }, { status: 400 });
   }
@@ -65,34 +65,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Produk tidak memiliki provider_code' }, { status: 400 });
   }
 
-  // Ambil konfigurasi JokerPanel
-  const cfg = await getJoker();
-  if (!cfg.apiId || !cfg.apiKey) {
+  // Ambil konfigurasi SprintPedia
+  const cfg = await getSprint();
+  if (!cfg.apiKey || !cfg.secretKey) {
     return NextResponse.json({
-      error: 'API ID / API Key JokerPanel belum diisi di Koneksi & API.',
+      error: 'API Key / Secret Key SprintPedia belum diisi di Koneksi & API.',
     }, { status: 400 });
   }
 
-  // Kirim order ke JokerPanel
+  // Kirim order ke SprintPedia
   const target = order.buyer_input || order.target_input || '';
   const quantity = order.quantity || 1000;
 
   try {
-    const result = await jokerOrder(cfg, Number(product.provider_code), target, quantity);
+    const result = await sprintOrder(cfg, product.provider_code, target, quantity, {
+      custom_link: order.meta?.custom_link,
+      custom_comments: order.meta?.custom_comments,
+    });
 
-    // Simpan provider_ref (JokerPanel order ID) dan update status
+    // result.data = { id: 1107, price: 10900 }
+    // Simpan provider_ref (SprintPedia order ID) dan update status
     await sb.from('orders').update({
-      provider_ref: String(result.order),
+      provider_ref: String(result.data.id),
+      provider_charge: Number(result.data.price),
       process_status: 'pending',
     }).eq('id', order.id);
 
     return NextResponse.json({
       ok: true,
-      provider_ref: String(result.order),
-      message: `Order berhasil dikirim ke JokerPanel (ID: ${result.order})`,
+      provider_ref: String(result.data.id),
+      message: `Order berhasil dikirim ke SprintPedia (ID: ${result.data.id})`,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Gagal mengirim order ke JokerPanel';
+    const message = err instanceof Error ? err.message : 'Gagal mengirim order ke SprintPedia';
     // Update status gagal
     await sb.from('orders').update({
       process_status: 'failed',

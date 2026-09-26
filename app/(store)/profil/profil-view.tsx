@@ -36,7 +36,7 @@ interface OrderRow {
 const MODULES = [
   { value: '', label: 'Semua' },
   { value: 'digiflazz', label: 'Topup Game / Pulsa / Token' },
-  { value: 'jokerpanel', label: 'SMM Panel' },
+  { value: 'sprintpedia', label: 'SMM Panel' },
   { value: 'manual_nokos', label: 'Nokos' },
   { value: 'manual_app', label: 'App Premium' },
   { value: 'manual_robux', label: 'Robux Vilog' },

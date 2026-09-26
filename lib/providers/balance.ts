@@ -1,6 +1,6 @@
 import crypto from 'crypto';
-import { getDigiflazz, getJoker, fetchJson } from '@/lib/server-config';
-import { jokerBalance } from '@/lib/joker';
+import { getDigiflazz, getSprint, fetchJson } from '@/lib/server-config';
+import { sprintServices } from '@/lib/sprintpedia';
 
 /**
  * Cek saldo deposit Digiflazz
@@ -46,36 +46,37 @@ export async function getDigiflazzBalance() {
 }
 
 /**
- * Cek saldo JokerPanel (Official API)
- * Uses POST /api/balance with api_id + api_key
- * Reads credentials from Supabase settings (fallback: process.env)
+ * Cek koneksi SprintPedia
+ * SprintPedia tidak punya endpoint /balance, jadi kita test via /services.
+ * Jika berhasil = terhubung, kita hitung jumlah layanan sebagai indikator.
  */
-export async function getJokerPanelBalance() {
-  const cfg = await getJoker();
+export async function getSprintPediaBalance() {
+  const cfg = await getSprint();
 
-  if (!cfg.apiId || !cfg.apiKey) {
+  if (!cfg.apiKey || !cfg.secretKey) {
     return {
-      provider: 'jokerpanel' as const,
+      provider: 'sprintpedia' as const,
       balance: 0,
       currency: 'IDR',
-      error: 'API ID / API Key JokerPanel belum diisi. Simpan di halaman Koneksi & API.',
+      error: 'API Key / Secret Key SprintPedia belum diisi. Simpan di halaman Koneksi & API.',
     };
   }
 
   try {
-    const json = await jokerBalance(cfg);
+    const json = await sprintServices(cfg);
+    const count = Array.isArray(json.data) ? json.data.length : 0;
     return {
-      provider: 'jokerpanel' as const,
-      balance: Number(json.balance ?? 0),
-      currency: json.currency ?? 'IDR',
+      provider: 'sprintpedia' as const,
+      balance: count, // Jumlah layanan (bukan saldo, karena SprintPedia tidak expose balance)
+      currency: 'services',
       raw: json,
     };
   } catch (err: any) {
     return {
-      provider: 'jokerpanel' as const,
+      provider: 'sprintpedia' as const,
       balance: 0,
       currency: 'IDR',
-      error: err.message || 'Gagal menghubungi API JokerPanel',
+      error: err.message || 'Gagal menghubungi API SprintPedia',
     };
   }
 }

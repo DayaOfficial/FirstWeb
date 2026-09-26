@@ -65,7 +65,7 @@ export default function OwnerDashboard() {
           const { balances } = await res.json();
           const lowBalances = (balances || []).filter((b: { balance: number; provider: string }) => {
             if (b.provider === 'digiflazz') return b.balance < 100000;
-            if (b.provider === 'jokerpanel') return b.balance < 50;
+            if (b.provider === 'sprintpedia') return b.balance < 1; // SprintPedia: 0 = not connected
             return false;
           });
           setWarnings(lowBalances);
@@ -134,7 +134,7 @@ export default function OwnerDashboard() {
               <AlertTriangle size={20} className="text-error shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-error">
-                  Saldo {w.provider === 'digiflazz' ? 'Digiflazz' : 'JokerPanel'} menipis!
+                  Saldo {w.provider === 'digiflazz' ? 'Digiflazz' : 'SprintPedia'} menipis!
                 </p>
                 <p className="text-xs text-error/80">
                   Sisa: {w.currency === 'IDR' ? formatRupiah(w.balance) : `$${w.balance}`} — segera lakukan deposit.

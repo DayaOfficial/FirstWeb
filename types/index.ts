@@ -2,7 +2,7 @@ export interface Product {
   id: string;
   name: string;
   category: string;
-  module: 'digiflazz' | 'jokerpanel' | 'manual_robux' | 'manual_nokos' | 'manual_app';
+  module: 'digiflazz' | 'sprintpedia' | 'manual_robux' | 'manual_nokos' | 'manual_app';
   providerCode?: string;
   priceModal: number;
   priceSell: number;

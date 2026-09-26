@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server';
-import { getDigiflazzBalance, getJokerPanelBalance } from '@/lib/providers/balance';
+import { getDigiflazzBalance, getSprintPediaBalance } from '@/lib/providers/balance';
 import { NextResponse } from 'next/server';
 
 /**
@@ -20,7 +20,7 @@ export async function GET(req: Request) {
 
   const checks = await Promise.allSettled([
     getDigiflazzBalance(),
-    getJokerPanelBalance(),
+    getSprintPediaBalance(),
   ]);
 
   const results = [];
@@ -59,7 +59,7 @@ export async function GET(req: Request) {
           await supabase.from('notifications').insert({
             user_id: owner.id,
             type: 'saldo_low',
-            title: `Saldo ${c.provider === 'digiflazz' ? 'Digiflazz' : 'JokerPanel'} menipis!`,
+            title: `Saldo ${c.provider === 'digiflazz' ? 'Digiflazz' : 'SprintPedia'} menipis!`,
             message: `Saldo tersisa ${c.currency === 'IDR' ? 'Rp ' : '$ '}${Number(c.balance).toLocaleString('id-ID')}. Segera deposit agar transaksi tidak gagal.`,
             metadata: c,
           });

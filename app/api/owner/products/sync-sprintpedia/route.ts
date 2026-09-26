@@ -1,7 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import { getJoker } from '@/lib/server-config';
-import { jokerServices } from '@/lib/joker';
+import { getSprint } from '@/lib/server-config';
+import { sprintServices } from '@/lib/sprintpedia';
 
 export const maxDuration = 60;
 
@@ -27,10 +27,10 @@ export async function POST() {
     .from('profiles').select('role').eq('id', user.id).single();
   if (profile?.role !== 'owner') return NextResponse.json({ error: 'forbidden' }, { status: 403 });
 
-  const cfg = await getJoker();
-  if (!cfg.apiId || !cfg.apiKey) {
+  const cfg = await getSprint();
+  if (!cfg.apiKey || !cfg.secretKey) {
     return NextResponse.json({
-      error: 'API ID / API Key JokerPanel belum diisi di halaman Koneksi & API.',
+      error: 'API Key / Secret Key SprintPedia belum diisi di halaman Koneksi & API.',
     }, { status: 400 });
   }
 
@@ -38,12 +38,12 @@ export async function POST() {
 
   try {
     // === 1 API call: ambil semua services ===
-    const json = await jokerServices(cfg);
-    const services = Array.isArray(json.services) ? json.services : (Array.isArray(json) ? json : []);
+    const json = await sprintServices(cfg);
+    const services = Array.isArray(json.data) ? json.data : [];
 
     if (services.length === 0) {
       return NextResponse.json({
-        error: 'JokerPanel tidak mengembalikan layanan. Pastikan API ID & Key benar.',
+        error: 'SprintPedia tidak mengembalikan layanan. Pastikan API Key & Secret Key benar.',
         synced: 0,
       }, { status: 400 });
     }
@@ -53,27 +53,31 @@ export async function POST() {
     for (const s of services) {
       const platform = platformOf(s.name ?? '', s.category ?? '');
       allRows.push({
-        module: 'jokerpanel',
+        module: 'sprintpedia',
         provider_code: String(s.id),
         name: s.name,
         brand: platform,
         category: 'SMM',
-        smm_category: s.category || null,  // Kategori asli dari JokerPanel
+        smm_category: s.category || null,
         service_type: s.type || null,
         description: s.description || null,
         min_qty: Number(s.min) || 10,
         max_qty: Number(s.max) || 100000,
         price_modal: Number(s.price),
         price_sell: Math.round(Number(s.price) * 1.3),
+        is_cancelable: !!s.cancel,
+        is_refillable: !!s.refill,
+        refill_days: Number(s.refill_days || 0),
+        avg_time: s.avg_time || null,
         synced_at: new Date().toISOString(),
       });
     }
 
-    // === 1 query: ambil semua existing jokerpanel products ===
+    // === 1 query: ambil semua existing sprintpedia products ===
     const { data: existing } = await sb
       .from('products')
       .select('id, provider_code, price_modal')
-      .eq('module', 'jokerpanel');
+      .eq('module', 'sprintpedia');
 
     const existingMap = new Map(
       (existing || []).map((r: Record<string, unknown>) => [r.provider_code as string, r])
@@ -87,7 +91,8 @@ export async function POST() {
       const ex = existingMap.get(row.provider_code as string) as Record<string, unknown> | undefined;
       if (!ex) {
         toInsert.push({ ...row, is_active: false });
-      } else if (Number(ex.price_modal) !== Number(row.price_modal)) {
+      } else {
+        // Always update metadata, preserve price_sell and is_active
         toUpdate.push({
           id: ex.id as string,
           updates: {
@@ -99,6 +104,10 @@ export async function POST() {
             min_qty: row.min_qty,
             max_qty: row.max_qty,
             price_modal: row.price_modal,
+            is_cancelable: row.is_cancelable,
+            is_refillable: row.is_refillable,
+            refill_days: row.refill_days,
+            avg_time: row.avg_time,
             synced_at: row.synced_at,
             // PRESERVE: price_sell, is_active, image_url
           },
@@ -111,7 +120,7 @@ export async function POST() {
       const batch = toInsert.slice(i, i + 500);
       const { error } = await sb.from('products').insert(batch);
       if (error) {
-        console.error('[sync-jokerpanel] batch insert error:', error.message);
+        console.error('[sync-sprintpedia] batch insert error:', error.message);
         return NextResponse.json({
           error: 'Insert gagal: ' + error.message,
           batch: `${i}-${i + batch.length}`,
@@ -139,11 +148,11 @@ export async function POST() {
     const { count } = await sb
       .from('products')
       .select('*', { count: 'exact', head: true })
-      .eq('module', 'jokerpanel');
+      .eq('module', 'sprintpedia');
 
     // === Log ===
     await sb.from('sync_logs').insert({
-      provider: 'jokerpanel',
+      provider: 'sprintpedia',
       action: 'services_sync',
       total_items: allRows.length,
       status: updateErrors > 0 ? 'partial' : 'success',
@@ -161,7 +170,7 @@ export async function POST() {
     const message = err instanceof Error ? err.message : 'Unknown error';
 
     await sb.from('sync_logs').insert({
-      provider: 'jokerpanel',
+      provider: 'sprintpedia',
       action: 'services_sync',
       total_items: 0,
       status: 'error',
