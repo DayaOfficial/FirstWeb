@@ -116,7 +116,7 @@ export default function OwnerApiPage() {
       const res = await fetch('/api/owner/sprintpedia/test', { method: 'POST' });
       const data = await res.json();
       if (data.ok) {
-        setTestResult({ provider: 'sprintpedia', msg: `✅ Terhubung! ${data.services} layanan tersedia.`, ok: true });
+        setTestResult({ provider: 'sprintpedia', msg: `✅ Terhubung! Saldo: Rp ${Number(data.balance).toLocaleString('id-ID')}`, ok: true });
       } else {
         setTestResult({ provider: 'sprintpedia', msg: `❌ ${data.error}`, ok: false });
       }

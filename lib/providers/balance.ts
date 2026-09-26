@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { getDigiflazz, getSprint, fetchJson } from '@/lib/server-config';
-import { sprintServices } from '@/lib/sprintpedia';
+import { sprintProfile } from '@/lib/sprintpedia';
 
 /**
  * Cek saldo deposit Digiflazz
@@ -46,9 +46,8 @@ export async function getDigiflazzBalance() {
 }
 
 /**
- * Cek koneksi SprintPedia
- * SprintPedia tidak punya endpoint /balance, jadi kita test via /services.
- * Jika berhasil = terhubung, kita hitung jumlah layanan sebagai indikator.
+ * Cek saldo SprintPedia via POST /api/profile
+ * Returns balance in IDR.
  */
 export async function getSprintPediaBalance() {
   const cfg = await getSprint();
@@ -63,11 +62,10 @@ export async function getSprintPediaBalance() {
   }
 
   try {
-    const json = await sprintServices(cfg);
-    const count = Array.isArray(json.data) ? json.data.length : 0;
+    const json = await sprintProfile(cfg);
     return {
       provider: 'sprintpedia' as const,
-      balance: count, // Jumlah layanan tersedia
+      balance: Number(json.data?.balance ?? 0),
       currency: 'IDR',
       raw: json,
     };
@@ -80,3 +78,4 @@ export async function getSprintPediaBalance() {
     };
   }
 }
+

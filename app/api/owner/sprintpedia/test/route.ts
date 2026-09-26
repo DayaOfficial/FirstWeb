@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createServiceClient } from '@/lib/supabase/server';
 import { getSprint } from '@/lib/server-config';
-import { sprintServices } from '@/lib/sprintpedia';
+import { sprintProfile } from '@/lib/sprintpedia';
 
 /**
  * POST /api/owner/sprintpedia/test
- * Test SprintPedia connection — fetch services list to verify credentials.
- * Returns service count if credentials are valid.
+ * Test SprintPedia connection — fetch profile to verify credentials and get balance.
  */
 export async function POST() {
   const supabase = await createClient();
@@ -23,12 +21,13 @@ export async function POST() {
   }
 
   try {
-    const json = await sprintServices(cfg);
-    const count = Array.isArray(json.data) ? json.data.length : 0;
+    const json = await sprintProfile(cfg);
+    const balance = Number(json.data?.balance ?? 0);
     return NextResponse.json({
       ok: true,
-      services: count,
-      message: `Terhubung! ${count} layanan tersedia.`,
+      balance,
+      currency: 'IDR',
+      message: `Terhubung! Saldo: Rp ${balance.toLocaleString('id-ID')}`,
     });
   } catch (err: any) {
     return NextResponse.json(

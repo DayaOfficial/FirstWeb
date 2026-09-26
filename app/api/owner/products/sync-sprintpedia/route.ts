@@ -17,44 +17,65 @@ function platformOf(name: string, category: string): string {
   return found ? found.charAt(0).toUpperCase() + found.slice(1) : 'Lainnya';
 }
 
-export async function POST() {
-  // Auth check: hanya owner
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-
-  const { data: profile } = await supabase
-    .from('profiles').select('role').eq('id', user.id).single();
-  if (profile?.role !== 'owner') return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-
+/**
+ * Shared sync logic — dipanggil dari POST (manual) dan cron (otomatis).
+ */
+export async function syncSprintPedia(sb: ReturnType<typeof createServiceClient>) {
   const cfg = await getSprint();
   if (!cfg.apiKey || !cfg.secretKey) {
-    return NextResponse.json({
-      error: 'API Key / Secret Key SprintPedia belum diisi di halaman Koneksi & API.',
-    }, { status: 400 });
+    throw new Error('API Key / Secret Key SprintPedia belum diisi.');
   }
 
-  const sb = createServiceClient();
+  const json = await sprintServices(cfg);
+  const services = Array.isArray(json.data) ? json.data : [];
+  if (services.length === 0) {
+    throw new Error('SprintPedia tidak mengembalikan layanan.');
+  }
 
-  try {
-    // === 1 API call: ambil semua services ===
-    const json = await sprintServices(cfg);
-    const services = Array.isArray(json.data) ? json.data : [];
+  // === Ambil semua provider_code yang sudah ada di DB (semua module) ===
+  const { data: existing } = await sb
+    .from('products')
+    .select('id, provider_code, price_sell, is_active, module');
 
-    if (services.length === 0) {
-      return NextResponse.json({
-        error: 'SprintPedia tidak mengembalikan layanan. Pastikan API Key & Secret Key benar.',
-        synced: 0,
-      }, { status: 400 });
-    }
+  const existingMap = new Map<string, { id: string; provider_code: string; price_sell: number; is_active: boolean; module: string }>(
+    (existing || []).map((r: any) => [String(r.provider_code), r])
+  );
 
-    // === Build rows dari API response ===
-    const allRows: Record<string, unknown>[] = [];
-    for (const s of services) {
-      const platform = platformOf(s.name ?? '', s.category ?? '');
-      allRows.push({
+  let inserted = 0;
+  let updated = 0;
+  let errors = 0;
+
+  for (const s of services) {
+    const code = String(s.id);
+    const platform = platformOf(s.name ?? '', s.category ?? '');
+    const ex = existingMap.get(code);
+
+    if (ex) {
+      // === UPDATE: produk sudah ada — perbarui metadata, jaga price_sell & is_active ===
+      const { error } = await sb.from('products').update({
         module: 'sprintpedia',
-        provider_code: String(s.id),
+        name: s.name,
+        brand: platform,
+        category: 'SMM',
+        smm_category: s.category || null,
+        service_type: s.type || null,
+        description: s.description || null,
+        min_qty: Number(s.min) || 10,
+        max_qty: Number(s.max) || 100000,
+        price_modal: Number(s.price),
+        is_cancelable: !!s.cancel,
+        is_refillable: !!s.refill,
+        refill_days: Number(s.refill_days || 0),
+        avg_time: s.avg_time || null,
+        synced_at: new Date().toISOString(),
+      }).eq('id', ex.id);
+
+      if (error) { errors++; } else { updated++; }
+    } else {
+      // === INSERT: produk baru ===
+      const { error } = await sb.from('products').insert({
+        module: 'sprintpedia',
+        provider_code: code,
         name: s.name,
         brand: platform,
         category: 'SMM',
@@ -69,104 +90,52 @@ export async function POST() {
         is_refillable: !!s.refill,
         refill_days: Number(s.refill_days || 0),
         avg_time: s.avg_time || null,
+        is_active: false,
         synced_at: new Date().toISOString(),
       });
-    }
 
-    // === 1 query: ambil semua existing products by provider_code (termasuk jokerpanel lama) ===
-    const { data: existing } = await sb
-      .from('products')
-      .select('id, provider_code, price_modal, module')
-      .in('module', ['sprintpedia', 'jokerpanel']);
-
-    const existingMap = new Map(
-      (existing || []).map((r: Record<string, unknown>) => [r.provider_code as string, r])
-    );
-
-    // === Split: insert vs update ===
-    const toInsert: Record<string, unknown>[] = [];
-    const toUpdate: { id: string; updates: Record<string, unknown> }[] = [];
-
-    for (const row of allRows) {
-      const ex = existingMap.get(row.provider_code as string) as Record<string, unknown> | undefined;
-      if (!ex) {
-        toInsert.push({ ...row, is_active: false });
-      } else {
-        // Always update metadata + migrate module, preserve price_sell and is_active
-        toUpdate.push({
-          id: ex.id as string,
-          updates: {
-            module: 'sprintpedia', // migrate jokerpanel → sprintpedia
-            name: row.name,
-            brand: row.brand,
-            smm_category: row.smm_category,
-            service_type: row.service_type,
-            description: row.description,
-            min_qty: row.min_qty,
-            max_qty: row.max_qty,
-            price_modal: row.price_modal,
-            is_cancelable: row.is_cancelable,
-            is_refillable: row.is_refillable,
-            refill_days: row.refill_days,
-            avg_time: row.avg_time,
-            synced_at: row.synced_at,
-            // PRESERVE: price_sell, is_active, image_url
-          },
-        });
-      }
-    }
-
-    // === Batch insert (500 per batch) — STOP pada error pertama ===
-    for (let i = 0; i < toInsert.length; i += 500) {
-      const batch = toInsert.slice(i, i + 500);
-      const { error } = await sb.from('products').insert(batch);
       if (error) {
-        console.error('[sync-sprintpedia] batch insert error:', error.message);
-        return NextResponse.json({
-          error: 'Insert gagal: ' + error.message,
-          batch: `${i}-${i + batch.length}`,
-        }, { status: 500 });
+        console.error(`[sync-sprintpedia] insert ${code} error:`, error.message);
+        errors++;
+      } else {
+        inserted++;
       }
     }
+  }
 
-    // === Parallel updates (batches of 50) ===
-    let updateErrors = 0;
-    const updateBatches = [];
-    for (let i = 0; i < toUpdate.length; i += 50) {
-      const batch = toUpdate.slice(i, i + 50);
-      updateBatches.push(
-        Promise.all(
-          batch.map(u =>
-            sb.from('products').update(u.updates).eq('id', u.id)
-              .then(({ error }: { error: unknown }) => { if (error) updateErrors++; })
-          )
-        )
-      );
-    }
-    await Promise.all(updateBatches);
+  // === Hitung total ===
+  const { count } = await sb
+    .from('products')
+    .select('*', { count: 'exact', head: true })
+    .eq('module', 'sprintpedia');
 
-    // === Hitung dari DB setelah insert (count nyata) ===
-    const { count } = await sb
-      .from('products')
-      .select('*', { count: 'exact', head: true })
-      .eq('module', 'sprintpedia');
+  return { synced: count ?? 0, inserted, updated, errors, total: services.length };
+}
 
-    // === Log ===
+export async function POST() {
+  // Auth check: hanya owner
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+
+  const { data: profile } = await supabase
+    .from('profiles').select('role').eq('id', user.id).single();
+  if (profile?.role !== 'owner') return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+
+  const sb = createServiceClient();
+
+  try {
+    const result = await syncSprintPedia(sb);
+
     await sb.from('sync_logs').insert({
       provider: 'sprintpedia',
       action: 'services_sync',
-      total_items: allRows.length,
-      status: updateErrors > 0 ? 'partial' : 'success',
-      error_message: updateErrors > 0 ? `${updateErrors} update gagal` : null,
+      total_items: result.total,
+      status: result.errors > 0 ? 'partial' : 'success',
+      error_message: result.errors > 0 ? `${result.errors} operasi gagal` : null,
     });
 
-    return NextResponse.json({
-      synced: count ?? 0,
-      inserted: toInsert.length,
-      updated: toUpdate.length,
-      unchanged: allRows.length - toInsert.length - toUpdate.length,
-      errors: updateErrors,
-    });
+    return NextResponse.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
 

@@ -78,3 +78,7 @@ export const sprintRefill = (cfg: SprintConfig, id: string) =>
 /** POST /refill_status → { status: true, data: { status } } */
 export const sprintRefillStatus = (cfg: SprintConfig, id: string) =>
   post('/refill_status', { id }, cfg);
+
+/** POST /profile → { status: true, data: { username, full_name, balance } } */
+export const sprintProfile = (cfg: SprintConfig) =>
+  post('/profile', {}, cfg);
