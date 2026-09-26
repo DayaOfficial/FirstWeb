@@ -67,8 +67,8 @@ export async function getSprintPediaBalance() {
     const count = Array.isArray(json.data) ? json.data.length : 0;
     return {
       provider: 'sprintpedia' as const,
-      balance: count, // Jumlah layanan (bukan saldo, karena SprintPedia tidak expose balance)
-      currency: 'services',
+      balance: count, // Jumlah layanan tersedia
+      currency: 'IDR',
       raw: json,
     };
   } catch (err: any) {

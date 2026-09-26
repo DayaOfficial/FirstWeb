@@ -73,11 +73,11 @@ export async function POST() {
       });
     }
 
-    // === 1 query: ambil semua existing sprintpedia products ===
+    // === 1 query: ambil semua existing products by provider_code (termasuk jokerpanel lama) ===
     const { data: existing } = await sb
       .from('products')
-      .select('id, provider_code, price_modal')
-      .eq('module', 'sprintpedia');
+      .select('id, provider_code, price_modal, module')
+      .in('module', ['sprintpedia', 'jokerpanel']);
 
     const existingMap = new Map(
       (existing || []).map((r: Record<string, unknown>) => [r.provider_code as string, r])
@@ -92,10 +92,11 @@ export async function POST() {
       if (!ex) {
         toInsert.push({ ...row, is_active: false });
       } else {
-        // Always update metadata, preserve price_sell and is_active
+        // Always update metadata + migrate module, preserve price_sell and is_active
         toUpdate.push({
           id: ex.id as string,
           updates: {
+            module: 'sprintpedia', // migrate jokerpanel → sprintpedia
             name: row.name,
             brand: row.brand,
             smm_category: row.smm_category,
