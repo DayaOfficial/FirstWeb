@@ -84,27 +84,42 @@ export default function SMMPanelPage() {
   const [checkoutPhase, setCheckoutPhase] = useState<'form' | 'payment'>('form');
   const [ordering, setOrdering] = useState(false);
 
-  // Load produk SMM dari API (bypass RLS)
+  // Load produk SMM
   useEffect(() => {
     (async () => {
+      const mapData = (list: any[]) => list.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        brand: p.brand ?? 'Lainnya',
+        price_sell: Number(p.price_sell),
+        provider_code: p.provider_code ?? '',
+        description: p.description ?? '',
+        min_qty: Number(p.min_qty) || 10,
+        max_qty: Number(p.max_qty) || 100000,
+        smm_category: p.smm_category ?? '',
+        platform_icon_url: p.platform_icon_url ?? null,
+      }));
+
+      // Try 1: direct Supabase query (works if RLS allows)
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, brand, price_sell, provider_code, description, min_qty, max_qty, smm_category, platform_icon_url')
+        .eq('module', 'sprintpedia')
+        .order('brand', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        setProducts(mapData(data));
+        setLoading(false);
+        return;
+      }
+
+      // Try 2: fallback to API route (server-side, bypass RLS)
       try {
         const res = await fetch('/api/store/smm-services');
         const json = await res.json();
-
-        setProducts(
-          (json.services ?? []).map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            brand: p.brand ?? 'Lainnya',
-            price_sell: Number(p.price_sell),
-            provider_code: p.provider_code ?? '',
-            description: p.description ?? '',
-            min_qty: Number(p.min_qty) || 10,
-            max_qty: Number(p.max_qty) || 100000,
-            smm_category: p.smm_category ?? '',
-            platform_icon_url: p.platform_icon_url ?? null,
-          }))
-        );
+        if (json.services?.length > 0) {
+          setProducts(mapData(json.services));
+        }
       } catch (err: any) {
         console.error('[SMM] load error:', err.message);
       }
