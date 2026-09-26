@@ -26,36 +26,73 @@ interface SMMProduct {
   service_type?: string;
 }
 
-/* ===== PLATFORM ICONS (emoji fallback) ===== */
-const PLATFORM_ICONS: Record<string, string> = {
-  'All': '📋',
-  'Instagram': '📸',
-  'Facebook': '👤',
-  'Youtube': '▶️',
-  'Twitter': '🐦',
-  'Tiktok': '🎵',
-  'Spotify': '🎧',
-  'Telegram': '✈️',
-  'Google': '🔍',
-  'Twitch': '🎮',
-  'Discord': '💬',
-  'Website': '🌐',
-  'Whatsapp': '📱',
-  'Shopee': '🛒',
-  'Threads': '🧵',
-  'Linkedin': '💼',
-  'Pinterest': '📌',
-  'Snackvideo': '🎬',
-  'Roblox': '🎯',
-  'Soundcloud': '☁️',
-  'Reddit': '🤖',
-  'Snapchat': '👻',
-  'Line': '💚',
-  'Gmail': '📧',
-  'Tokopedia': '🛍️',
-  'Lazada': '🏪',
-  'Lainnya': '⚡',
+/* ===== PLATFORM BRAND COLORS ===== */
+const PLATFORM_COLORS: Record<string, string> = {
+  'All': '#8B5CF6',
+  'Instagram': '#E4405F',
+  'Facebook': '#1877F2',
+  'Youtube': '#FF0000',
+  'Twitter': '#1DA1F2',
+  'Tiktok': '#000000',
+  'Spotify': '#1DB954',
+  'Telegram': '#26A5E4',
+  'Google': '#4285F4',
+  'Twitch': '#9146FF',
+  'Discord': '#5865F2',
+  'Website': '#06B6D4',
+  'Whatsapp': '#25D366',
+  'Shopee': '#EE4D2D',
+  'Threads': '#000000',
+  'Linkedin': '#0A66C2',
+  'Pinterest': '#E60023',
+  'Snackvideo': '#FBBF24',
+  'Roblox': '#E2231A',
+  'Soundcloud': '#FF5500',
+  'Reddit': '#FF4500',
+  'Snapchat': '#FFFC00',
+  'Line': '#06C755',
+  'Gmail': '#EA4335',
+  'Tokopedia': '#42B549',
+  'Lazada': '#0F146D',
+  'Lainnya': '#6366F1',
 };
+
+/* ===== Platform Icon Component ===== */
+function PlatformIcon({ name, iconUrl, size = 20, isActive = false }: { name: string; iconUrl?: string | null; size?: number; isActive?: boolean }) {
+  // If owner uploaded a custom icon, use it
+  if (iconUrl) {
+    return (
+      <img
+        src={iconUrl}
+        alt={name}
+        width={size}
+        height={size}
+        className="rounded-md object-contain"
+        style={{ width: size, height: size }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+      />
+    );
+  }
+
+  // Styled circle with initial letter and brand color
+  const color = PLATFORM_COLORS[name] || '#6366F1';
+  const initial = name === 'All' ? '≡' : name.charAt(0).toUpperCase();
+
+  return (
+    <div
+      className="flex items-center justify-center rounded-lg font-bold text-white shrink-0"
+      style={{
+        width: size,
+        height: size,
+        fontSize: size * 0.5,
+        background: isActive ? 'rgba(255,255,255,0.25)' : color,
+        boxShadow: isActive ? 'none' : `0 2px 8px ${color}40`,
+      }}
+    >
+      {initial}
+    </div>
+  );
+}
 
 /* ===== PAGE ===== */
 export default function SMMPanelPage() {
@@ -106,11 +143,18 @@ export default function SMMPanelPage() {
 
   // === Derived data ===
 
-  // Unique platforms
-  const platforms = useMemo(() => {
-    const set = new Set<string>();
-    products.forEach(p => set.add(p.brand));
-    return ['All', ...Array.from(set).sort()];
+  // Unique platforms with icon URLs
+  const platformsData = useMemo(() => {
+    const map = new Map<string, string | null>();
+    products.forEach(p => {
+      if (!map.has(p.brand)) {
+        map.set(p.brand, p.platform_icon_url || null);
+      } else if (!map.get(p.brand) && p.platform_icon_url) {
+        map.set(p.brand, p.platform_icon_url);
+      }
+    });
+    const sorted = Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    return [{ name: 'All', iconUrl: null }, ...sorted.map(([name, iconUrl]) => ({ name, iconUrl }))];
   }, [products]);
 
   // Products filtered by platform & search
@@ -245,19 +289,19 @@ export default function SMMPanelPage() {
       {/* ═══════ PLATFORM GRID ═══════ */}
       <div className="bg-surface-container-lowest rounded-2xl p-4 shadow-soft border border-outline-variant/20">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-          {platforms.map(p => (
+          {platformsData.map(p => (
             <button
-              key={p}
-              onClick={() => handlePlatformChange(p)}
+              key={p.name}
+              onClick={() => handlePlatformChange(p.name)}
               className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer
-                ${activePlatform === p
+                ${activePlatform === p.name
                   ? 'bg-primary text-white shadow-md scale-[1.02]'
                   : 'bg-surface-container-low text-on-surface hover:bg-primary/10 hover:text-primary border border-outline-variant/20'
                 }`}
             >
-              <span className="text-base">{PLATFORM_ICONS[p] || '⚡'}</span>
-              <span className="truncate">{p}</span>
-              {activePlatform === p && p === 'All' && (
+              <PlatformIcon name={p.name} iconUrl={p.iconUrl} size={22} isActive={activePlatform === p.name} />
+              <span className="truncate">{p.name}</span>
+              {activePlatform === p.name && p.name === 'All' && (
                 <span className="ml-auto text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full">
                   {products.length}
                 </span>
@@ -451,7 +495,7 @@ export default function SMMPanelPage() {
       {/* Stats */}
       {products.length > 0 && (
         <div className="text-center text-xs text-on-surface-variant/60">
-          {products.length.toLocaleString()} layanan tersedia • {platforms.length - 1} platform • Powered by SprintPedia
+          {products.length.toLocaleString()} layanan tersedia • {platformsData.length - 1} platform • Powered by SprintPedia
         </div>
       )}
     </div>
