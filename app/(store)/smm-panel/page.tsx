@@ -84,16 +84,15 @@ export default function SMMPanelPage() {
   const [checkoutPhase, setCheckoutPhase] = useState<'form' | 'payment'>('form');
   const [ordering, setOrdering] = useState(false);
 
-  // Load produk SMM dari API (auto-sync jika belum ada)
+  // Load produk SMM dari API (bypass RLS)
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch('/api/store/smm-services');
         const json = await res.json();
-        const data = json.services || [];
 
         setProducts(
-          data.map((p: any) => ({
+          (json.services ?? []).map((p: any) => ({
             id: p.id,
             name: p.name,
             brand: p.brand ?? 'Lainnya',
