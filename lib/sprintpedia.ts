@@ -3,7 +3,7 @@
  * Base URL: https://sprintpedia.id/api/{aksi}
  *
  * Auth: api_key + secret_key (no IP whitelist needed)
- * Format: POST JSON, response { status: true/false, data, msg?, orders? }
+ * Format: POST form-urlencoded, response JSON { status: true/false, data, msg?, orders? }
  *
  * Endpoints: /services, /order, /status, /refill, /refill_status
  */
@@ -16,16 +16,21 @@ export interface SprintConfig {
 }
 
 /**
- * POST JSON to SprintPedia.
+ * POST form-urlencoded to SprintPedia.
  * Throws descriptive error if response status !== true.
  * Error messages live in `data` (string) when status is false.
  */
 async function post(path: string, body: Record<string, any>, cfg: SprintConfig) {
-  const payload = { api_key: cfg.apiKey, secret_key: cfg.secretKey, ...body };
+  const payload: Record<string, string> = { api_key: cfg.apiKey, secret_key: cfg.secretKey };
+  for (const [k, v] of Object.entries(body)) {
+    if (v !== undefined && v !== null) payload[k] = String(v);
+  }
+
+  const params = new URLSearchParams(payload);
   const res = await fetch(BASE + path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
   });
 
   const text = await res.text();
