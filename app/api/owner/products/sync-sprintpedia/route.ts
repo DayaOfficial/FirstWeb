@@ -19,6 +19,7 @@ function platformOf(name: string, category: string): string {
 
 /**
  * Shared sync logic — dipanggil dari POST (manual) dan cron (otomatis).
+ * Strategi: hapus semua produk jokerpanel lama, lalu upsert batch.
  */
 export async function syncSprintPedia(sb: ReturnType<typeof createServiceClient>) {
   const cfg = await getSprint();
@@ -32,88 +33,65 @@ export async function syncSprintPedia(sb: ReturnType<typeof createServiceClient>
     throw new Error('SprintPedia tidak mengembalikan layanan.');
   }
 
-  // === Ambil semua provider_code yang sudah ada di DB (semua module) ===
-  const { data: existing } = await sb
-    .from('products')
-    .select('id, provider_code, price_sell, is_active, module');
+  // === Step 1: Hapus semua produk jokerpanel lama ===
+  await sb.from('products').delete().eq('module', 'jokerpanel');
 
-  const existingMap = new Map<string, { id: string; provider_code: string; price_sell: number; is_active: boolean; module: string }>(
-    (existing || []).map((r: any) => [String(r.provider_code), r])
-  );
+  // === Step 2: Build rows ===
+  const rows = services.map((s: any) => {
+    const platform = platformOf(s.name ?? '', s.category ?? '');
+    return {
+      module: 'sprintpedia',
+      provider_code: String(s.id),
+      name: s.name,
+      brand: platform,
+      category: 'SMM',
+      smm_category: s.category || null,
+      service_type: s.type || null,
+      description: s.description || null,
+      min_qty: Number(s.min) || 10,
+      max_qty: Number(s.max) || 100000,
+      price_modal: Number(s.price),
+      price_sell: Math.round(Number(s.price) * 1.3),
+      is_cancelable: !!s.cancel,
+      is_refillable: !!s.refill,
+      refill_days: Number(s.refill_days || 0),
+      avg_time: s.avg_time || null,
+      is_active: true,
+      synced_at: new Date().toISOString(),
+    };
+  });
 
+  // === Step 3: Batch upsert (500 per batch) ===
   let inserted = 0;
-  let updated = 0;
   let errors = 0;
 
-  for (const s of services) {
-    const code = String(s.id);
-    const platform = platformOf(s.name ?? '', s.category ?? '');
-    const ex = existingMap.get(code);
-
-    if (ex) {
-      // === UPDATE: produk sudah ada — perbarui metadata, jaga price_sell & is_active ===
-      const { error } = await sb.from('products').update({
-        module: 'sprintpedia',
-        name: s.name,
-        brand: platform,
-        category: 'SMM',
-        smm_category: s.category || null,
-        service_type: s.type || null,
-        description: s.description || null,
-        min_qty: Number(s.min) || 10,
-        max_qty: Number(s.max) || 100000,
-        price_modal: Number(s.price),
-        is_cancelable: !!s.cancel,
-        is_refillable: !!s.refill,
-        refill_days: Number(s.refill_days || 0),
-        avg_time: s.avg_time || null,
-        synced_at: new Date().toISOString(),
-      }).eq('id', ex.id);
-
-      if (error) { errors++; } else { updated++; }
-    } else {
-      // === INSERT: produk baru ===
-      const { error } = await sb.from('products').insert({
-        module: 'sprintpedia',
-        provider_code: code,
-        name: s.name,
-        brand: platform,
-        category: 'SMM',
-        smm_category: s.category || null,
-        service_type: s.type || null,
-        description: s.description || null,
-        min_qty: Number(s.min) || 10,
-        max_qty: Number(s.max) || 100000,
-        price_modal: Number(s.price),
-        price_sell: Math.round(Number(s.price) * 1.3),
-        is_cancelable: !!s.cancel,
-        is_refillable: !!s.refill,
-        refill_days: Number(s.refill_days || 0),
-        avg_time: s.avg_time || null,
-        is_active: false,
-        synced_at: new Date().toISOString(),
+  for (let i = 0; i < rows.length; i += 500) {
+    const batch = rows.slice(i, i + 500);
+    const { error, count } = await sb
+      .from('products')
+      .upsert(batch, {
+        onConflict: 'provider_code',
+        ignoreDuplicates: false,
       });
 
-      if (error) {
-        console.error(`[sync-sprintpedia] insert ${code} error:`, error.message);
-        errors++;
-      } else {
-        inserted++;
-      }
+    if (error) {
+      console.error(`[sync-sprintpedia] batch ${i} error:`, error.message);
+      errors++;
+    } else {
+      inserted += batch.length;
     }
   }
 
-  // === Hitung total ===
-  const { count } = await sb
+  // === Step 4: Count total ===
+  const { count: total } = await sb
     .from('products')
     .select('*', { count: 'exact', head: true })
     .eq('module', 'sprintpedia');
 
-  return { synced: count ?? 0, inserted, updated, errors, total: services.length };
+  return { synced: total ?? 0, inserted, errors, total: services.length };
 }
 
 export async function POST() {
-  // Auth check: hanya owner
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -132,7 +110,7 @@ export async function POST() {
       action: 'services_sync',
       total_items: result.total,
       status: result.errors > 0 ? 'partial' : 'success',
-      error_message: result.errors > 0 ? `${result.errors} operasi gagal` : null,
+      error_message: result.errors > 0 ? `${result.errors} batch gagal` : null,
     });
 
     return NextResponse.json(result);
