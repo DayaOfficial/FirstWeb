@@ -27,6 +27,7 @@ export interface CheckoutState {
   targetInput: string;
   duration: { value: number; unit: 'hari' | 'bulan'; label: string } | null;
   nominal: NominalOption | null;
+  quantity: number;
   buyerName: string;
   buyerPhone: string;
   orderId: string | null;
@@ -43,6 +44,7 @@ export function useCheckout(product: CheckoutProduct | null) {
     targetInput: '',
     duration: null,
     nominal: null,
+    quantity: 1,
     buyerName: '',
     buyerPhone: '',
     orderId: null,
@@ -84,6 +86,7 @@ export function useCheckout(product: CheckoutProduct | null) {
             nominal_code: state.nominal?.buyer_sku_code || state.nominal?.provider_code,
             nominal_name: state.nominal?.name,
             amount: state.nominal?.price_sell || state.nominal?.price,
+            quantity: state.quantity,
             buyer_name: state.buyerName,
             buyer_phone: state.buyerPhone,
           }),
@@ -127,6 +130,7 @@ export function useCheckout(product: CheckoutProduct | null) {
         targetInput: '',
         duration: null,
         nominal: null,
+        quantity: 1,
         buyerName: '',
         buyerPhone: '',
         orderId: null,

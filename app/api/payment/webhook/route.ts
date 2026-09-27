@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server';
+import { processSmm } from '@/lib/process-smm';
 import { NextResponse } from 'next/server';
 
 /**
@@ -69,20 +70,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Gagal update order' }, { status: 500 });
   }
 
-  // Jika order SMM (sprintpedia), trigger proses otomatis
+  // Jika order SMM (sprintpedia), LANGSUNG proses ke SprintPedia
+  // Tidak pakai self-fetch — langsung panggil function
   if (order.module === 'sprintpedia') {
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : 'http://localhost:3000';
-      await fetch(`${baseUrl}/api/orders/submit-smm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: order.id }),
-      });
-    } catch (err: any) {
-      console.error('[webhook] Auto-submit SMM error:', err?.message || err);
-      // Tidak gagalkan webhook — order sudah ditandai paid
+    console.log('[webhook] Memproses SMM order langsung:', order.id);
+    const smmResult = await processSmm(order.id);
+    if (!smmResult.ok) {
+      console.error('[webhook] SMM processing gagal:', smmResult.error);
+      // Order tetap paid, tapi process_status = 'failed'
+    } else {
+      console.log('[webhook] ✅ SMM berhasil dikirim, provider_ref:', smmResult.provider_ref);
     }
   }
 

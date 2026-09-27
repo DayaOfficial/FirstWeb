@@ -254,8 +254,6 @@ export default function SMMPanelPage() {
     try {
       go({
         product: {
-          // Jangan kirim SprintPedia service ID sebagai product_id (bukan UUID)
-          // Gunakan nama saja, product_id null
           name: `SMM — ${selectedService.name}`,
           needs_target: true,
           category: 'SMM',
@@ -266,6 +264,7 @@ export default function SMMPanelPage() {
           price_sell: totalPrice,
           provider_code: selectedService.provider_code,
         },
+        quantity: qty,
         targetInput: target,
         step: 'confirm' as const,
       });

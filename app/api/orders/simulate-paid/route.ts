@@ -1,13 +1,13 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { getSettings } from '@/lib/server-config';
+import { processSmm } from '@/lib/process-smm';
 import { NextResponse } from 'next/server';
 
 /**
  * POST /api/orders/simulate-paid
  * Body: { orderId: string }
  * Simulate a successful payment — ONLY active when test_mode = 'true' in settings.
- * Sets payment_status to 'paid' so the rest of the order flow can be tested
- * without real money.
+ * Sets payment_status to 'paid' then triggers SMM processing if applicable.
  */
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -66,20 +66,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Gagal: ' + error.message }, { status: 500 });
   }
 
-  // Jika order SMM (sprintpedia), trigger proses otomatis ke SprintPedia
+  // Jika order SMM, LANGSUNG proses ke SprintPedia (direct call, bukan self-fetch)
   if (order.module === 'sprintpedia') {
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : 'http://localhost:3000');
-      await fetch(`${baseUrl}/api/orders/submit-smm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId }),
+    console.log('[simulate-paid] Memproses SMM order langsung:', orderId);
+    const smmResult = await processSmm(orderId);
+    if (!smmResult.ok) {
+      console.error('[simulate-paid] SMM gagal:', smmResult.error);
+      return NextResponse.json({
+        ok: true,
+        message: 'Pembayaran disimulasikan, tapi SMM gagal: ' + smmResult.error,
+        smm_error: smmResult.error,
       });
-    } catch (err: any) {
-      console.error('[simulate-paid] Auto-submit SMM error:', err?.message || err);
     }
+    console.log('[simulate-paid] ✅ SMM berhasil, provider_ref:', smmResult.provider_ref);
+    return NextResponse.json({
+      ok: true,
+      message: `Pembayaran disimulasikan & SMM dikirim (ID: ${smmResult.provider_ref})`,
+      provider_ref: smmResult.provider_ref,
+    });
   }
 
   return NextResponse.json({ ok: true, message: 'Pembayaran disimulasikan (mode uji)' });
