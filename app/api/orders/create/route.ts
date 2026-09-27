@@ -44,28 +44,45 @@ export async function POST(req: Request) {
   let resolvedProductName = product_name || nominal_name || 'Produk Digital';
 
   if (product_id && !product_id.startsWith('fallback-')) {
-    const { data: product } = await serviceSupabase
-      .from('products')
-      .select('name, module, provider_code')
-      .eq('id', product_id)
-      .single();
+    // Validate UUID format before querying
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(product_id)) {
+      const { data: product } = await serviceSupabase
+        .from('products')
+        .select('name, module, provider_code')
+        .eq('id', product_id)
+        .single();
 
-    if (product) {
-      module = product.module;
-      resolvedProductName = product_name || product.name;
+      if (product) {
+        module = product.module;
+        resolvedProductName = product_name || product.name;
+      }
     }
+  }
+
+  // SMM orders: product_id is null but nominal_code is SprintPedia service ID
+  if (!product_id && nominal_code && product_name?.includes('SMM')) {
+    module = 'sprintpedia';
   }
 
   // Buat order
   const expiresAt = new Date();
   expiresAt.setMinutes(expiresAt.getMinutes() + 15); // 15 menit untuk bayar
 
+  // Build metadata for SMM orders
+  const meta: Record<string, any> = {};
+  if (module === 'sprintpedia' && nominal_code) {
+    meta.smm_provider_code = nominal_code;
+    meta.smm_quantity = quantity;
+    meta.smm_service_name = nominal_name || product_name;
+  }
+
   const { data: order, error } = await serviceSupabase
     .from('orders')
     .insert({
       order_code: orderCode,
       user_id: user.id,
-      product_id: (product_id && !product_id.startsWith('fallback-')) ? product_id : null,
+      product_id: (product_id && !product_id.startsWith('fallback-') && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(product_id)) ? product_id : null,
       module,
       product_name: resolvedProductName,
       quantity,
@@ -77,6 +94,7 @@ export async function POST(req: Request) {
       payment_method: 'qris',
       process_status: 'waiting',
       expires_at: expiresAt.toISOString(),
+      meta: Object.keys(meta).length > 0 ? meta : null,
     })
     .select('id, order_code')
     .single();

@@ -254,14 +254,14 @@ export default function SMMPanelPage() {
     try {
       go({
         product: {
-          id: selectedService.id,
-          name: selectedService.name,
+          // Jangan kirim SprintPedia service ID sebagai product_id (bukan UUID)
+          // Gunakan nama saja, product_id null
+          name: `SMM — ${selectedService.name}`,
           needs_target: true,
           category: 'SMM',
         },
         nominal: {
-          id: selectedService.id,
-          name: selectedService.name,
+          name: `${selectedService.name} (${qty.toLocaleString()})`,
           price: totalPrice,
           price_sell: totalPrice,
           provider_code: selectedService.provider_code,

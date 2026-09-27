@@ -27,10 +27,21 @@ interface OrderRow {
   product_name: string;
   module: string;
   amount: number;
+  quantity: number;
   payment_status: string;
   process_status: string;
   created_at: string;
   expires_at?: string;
+  buyer_input?: string;
+  meta?: {
+    smm_provider_code?: string;
+    smm_quantity?: number;
+    smm_service_name?: string;
+    smm_start_count?: number;
+    smm_remains?: number;
+    smm_charge?: number;
+    smm_last_check?: string;
+  } | null;
 }
 
 const MODULES = [
@@ -398,6 +409,43 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
                         <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Tanggal</p>
                         <p className="text-xs font-semibold text-on-surface">{formatDate(order.created_at)}</p>
                       </div>
+
+                      {/* SMM-specific details */}
+                      {order.buyer_input && (
+                        <div className="col-span-2">
+                          <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Target</p>
+                          <p className="text-xs font-semibold text-on-surface break-all">{order.buyer_input}</p>
+                        </div>
+                      )}
+                      {order.module === 'sprintpedia' && order.quantity > 1 && (
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Jumlah</p>
+                          <p className="text-xs font-bold text-on-surface">{order.quantity.toLocaleString()}</p>
+                        </div>
+                      )}
+                      {order.meta?.smm_start_count != null && (
+                        <>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Start Count</p>
+                            <p className="text-xs font-bold text-on-surface">{order.meta.smm_start_count.toLocaleString()}</p>
+                          </div>
+                          {order.process_status === 'success' && order.quantity > 0 && (
+                            <div>
+                              <p className="text-[10px] uppercase tracking-wider text-accent-green mb-0.5">Hasil Akhir</p>
+                              <p className="text-xs font-bold text-accent-green">
+                                {(order.meta.smm_start_count + order.quantity).toLocaleString()}
+                                <span className="text-on-surface-variant font-normal"> (+{order.quantity.toLocaleString()})</span>
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {order.meta?.smm_remains != null && order.meta.smm_remains > 0 && (
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Sisa</p>
+                          <p className="text-xs font-bold text-amber-600">{order.meta.smm_remains.toLocaleString()}</p>
+                        </div>
+                      )}
                     </div>
 
                     {canResume && (
