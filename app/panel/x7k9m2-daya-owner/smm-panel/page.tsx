@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { RefreshCw, Search, Check, ChevronDown, ChevronRight, Share2, Image as ImageIcon, X } from 'lucide-react';
+import { RefreshCw, Search, Check, ChevronDown, ChevronRight, Share2, Image as ImageIcon, X, Percent, Save } from 'lucide-react';
 
 interface SmmProduct {
   id: string;
@@ -26,9 +26,25 @@ export default function SmmPanelOwnerPage() {
   const [syncResult, setSyncResult] = useState<string | null>(null);
 
   // State untuk upload ikon platform
-  const [editingIcon, setEditingIcon] = useState<string | null>(null); // nama platform
+  const [editingIcon, setEditingIcon] = useState<string | null>(null);
   const [uploadingIcon, setUploadingIcon] = useState<string | null>(null);
   const [liveCount, setLiveCount] = useState<number | null>(null);
+
+  // Global markup (profit %)
+  const [markupPercent, setMarkupPercent] = useState<number>(30);
+  const [markupInput, setMarkupInput] = useState<string>('30');
+  const [savingMarkup, setSavingMarkup] = useState(false);
+  const [markupSaved, setMarkupSaved] = useState(false);
+
+  // Load global markup setting from database
+  const loadMarkup = useCallback(async () => {
+    const { data } = await sb.from('settings').select('value').eq('key', 'sprint_markup_percent').single();
+    if (data?.value) {
+      const val = Number(data.value);
+      setMarkupPercent(val);
+      setMarkupInput(String(val));
+    }
+  }, []);
 
   const load = useCallback(async () => {
     // 1) Live-fetch dari SprintPedia API (sama seperti store page)
@@ -36,7 +52,6 @@ export default function SmmPanelOwnerPage() {
       const res = await fetch('/api/store/smm-live');
       const json = await res.json();
       if (json.services && json.services.length > 0) {
-        // Map live services ke format SmmProduct
         const liveRows: SmmProduct[] = json.services.map((s: any) => ({
           id: s.id || s.provider_code,
           name: s.name,
@@ -86,7 +101,7 @@ export default function SmmPanelOwnerPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); loadMarkup(); }, [load, loadMarkup]);
 
   async function sync() {
     setBusy(true);
@@ -107,16 +122,26 @@ export default function SmmPanelOwnerPage() {
     setTimeout(() => setSyncResult(null), 4000);
   }
 
-  async function patch(id: string, p: Partial<SmmProduct>) {
-    await sb.from('products').update(p).eq('id', id);
-    load();
-  }
-
-  async function onMarkup(r: SmmProduct, val: number) {
-    await patch(r.id, {
-      markup_value: val,
-      price_sell: Math.round(r.price_modal + val),
-    });
+  // Save global markup to settings table
+  async function saveGlobalMarkup() {
+    const val = Number(markupInput);
+    if (isNaN(val) || val < 0 || val > 1000) {
+      alert('Markup harus antara 0-1000%');
+      return;
+    }
+    setSavingMarkup(true);
+    try {
+      // Upsert ke settings table
+      await sb.from('settings').upsert({ key: 'sprint_markup_percent', value: String(val) }, { onConflict: 'key' });
+      setMarkupPercent(val);
+      setMarkupSaved(true);
+      setTimeout(() => setMarkupSaved(false), 3000);
+      // Reload data to reflect new prices
+      await load();
+    } catch {
+      alert('Gagal menyimpan markup');
+    }
+    setSavingMarkup(false);
   }
 
   // Set icon URL untuk semua produk dengan brand yang sama
@@ -172,10 +197,49 @@ export default function SmmPanelOwnerPage() {
       </div>
 
       {syncResult && (
-        <div className={`text-sm px-4 py-2.5 rounded-xl animate-fade-in ${syncResult.startsWith('✅') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+        <div className={`text-sm px-4 py-2.5 rounded-xl animate-fade-in ${syncResult.startsWith('✅') ? 'bg-green-50 text-green-700 border border-green-200' : syncResult.startsWith('🔄') ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
           {syncResult}
         </div>
       )}
+
+      {/* ═══════ GLOBAL PROFIT SETTING ═══════ */}
+      <div className="rounded-2xl bg-surface-container-lowest border border-outline-variant/20 shadow-soft p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Percent size={18} className="text-primary" />
+          <h3 className="font-bold text-on-surface text-sm">Pengaturan Profit Global</h3>
+        </div>
+        <p className="text-xs text-on-surface-variant mb-4">
+          Atur persentase profit untuk <strong>semua layanan</strong> sekaligus. Harga jual = Harga modal + {markupPercent}% markup.
+        </p>
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-xs">
+            <input
+              type="number"
+              value={markupInput}
+              onChange={e => setMarkupInput(e.target.value)}
+              min={0}
+              max={1000}
+              className="w-full px-4 py-3 pr-12 rounded-xl bg-surface-container-low border border-outline-variant/30 text-sm font-bold text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              placeholder="30"
+            />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-on-surface-variant">%</span>
+          </div>
+          <button
+            onClick={saveGlobalMarkup}
+            disabled={savingMarkup || markupInput === String(markupPercent)}
+            className="flex items-center gap-2 px-5 py-3 rounded-xl gradient-primary text-white text-sm font-semibold hover:opacity-90 transition-all disabled:opacity-40"
+          >
+            <Save size={14} />
+            {savingMarkup ? 'Menyimpan...' : 'Simpan'}
+          </button>
+          {markupSaved && (
+            <span className="text-sm text-accent-green font-semibold animate-fade-in">✅ Tersimpan!</span>
+          )}
+        </div>
+        <div className="mt-3 p-3 bg-primary/5 rounded-xl text-xs text-on-surface-variant">
+          <strong>Contoh:</strong> Harga modal Rp 10.000 + markup {markupPercent}% = <strong className="text-primary">Rp {Math.round(10000 * (1 + Number(markupInput || 0) / 100)).toLocaleString('id-ID')}</strong>
+        </div>
+      </div>
 
       {/* Search */}
       <div className="relative max-w-md">
@@ -308,24 +372,12 @@ export default function SmmPanelOwnerPage() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <span className="text-xs text-on-surface-variant font-mono">
-                        M: Rp {Number(r.price_modal).toLocaleString('id-ID')}
+                        Modal: Rp {Number(r.price_modal).toLocaleString('id-ID')}
                       </span>
-                      <input
-                        type="number"
-                        defaultValue={r.markup_value}
-                        onBlur={e => onMarkup(r, Number(e.target.value))}
-                        className="w-20 px-2 py-1.5 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary transition-colors"
-                        title="Markup (nominal)"
-                      />
+                      <span className="text-xs text-on-surface-variant">→</span>
                       <span className="text-sm font-bold text-primary font-mono min-w-[90px] text-right">
                         Rp {Number(r.price_sell).toLocaleString('id-ID')}
                       </span>
-                      <button
-                        onClick={() => patch(r.id, { is_active: !r.is_active })}
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${r.is_active ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-surface-container-high text-on-surface-variant border border-outline-variant/30 hover:border-green-300'}`}
-                      >
-                        {r.is_active && <Check size={14} />}
-                      </button>
                     </div>
                   </div>
                 ))}

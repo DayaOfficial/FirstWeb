@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useCheckout } from '@/hooks/use-checkout';
 import { formatRupiah } from '@/lib/utils';
+import ConfirmationStep from '@/components/checkout/confirmation-step';
+import PaymentStep from '@/components/checkout/payment-step';
 import {
   Search, Globe, ChevronDown, RotateCcw, ShoppingCart, Loader2,
   ExternalLink, Info, Hash, Zap,
@@ -97,7 +99,7 @@ function PlatformIcon({ name, iconUrl, size = 20, isActive = false }: { name: st
 /* ===== PAGE ===== */
 export default function SMMPanelPage() {
   const supabase = createClient();
-  const { state, go } = useCheckout({ name: 'SMM Panel', needs_target: false });
+  const { state, go, actions } = useCheckout({ name: 'SMM Panel', needs_target: false });
 
   // Data
   const [products, setProducts] = useState<SMMProduct[]>([]);
@@ -282,6 +284,54 @@ export default function SMMPanelPage() {
     );
   }
 
+  // === CONFIRMATION STEP ===
+  if (state.step === 'confirm') {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6 pb-12">
+        <div>
+          <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-2">
+            <a href="/" className="hover:text-primary transition-colors">Beranda</a>
+            <span>›</span>
+            <a href="/smm-panel" className="hover:text-primary transition-colors">Sosial Media</a>
+            <span>›</span>
+            <span className="text-primary font-semibold">Konfirmasi</span>
+          </div>
+        </div>
+        <ConfirmationStep
+          state={state}
+          onConfirm={() => actions.confirmAndPay()}
+          onBack={() => go({ step: 'input' })}
+        />
+      </div>
+    );
+  }
+
+  // === PAYMENT STEP ===
+  if (state.step === 'payment') {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6 pb-12">
+        <div>
+          <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-2">
+            <a href="/" className="hover:text-primary transition-colors">Beranda</a>
+            <span>›</span>
+            <a href="/smm-panel" className="hover:text-primary transition-colors">Sosial Media</a>
+            <span>›</span>
+            <span className="text-primary font-semibold">Pembayaran</span>
+          </div>
+        </div>
+        <PaymentStep
+          orderId={state.orderId}
+          qrisUrl={state.qrisUrl}
+          qrString={state.qrString}
+          testMode={state.testMode}
+          amount={state.nominal?.price_sell || state.nominal?.price || 0}
+          productName={state.product?.name || 'SMM Panel'}
+        />
+      </div>
+    );
+  }
+
+  // === MAIN FORM ===
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       {/* Header */}

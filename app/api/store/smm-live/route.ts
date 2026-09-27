@@ -102,37 +102,14 @@ export async function GET() {
       }
     }
 
-    // Also get any custom price_sell overrides from synced products
-    const { data: priceOverrides } = await sb
-      .from('products')
-      .select('provider_code, price_sell, markup_value, is_active')
-      .eq('module', 'sprintpedia');
-
-    const priceMap: Record<string, { price_sell: number; markup_value: number; is_active: boolean }> = {};
-    if (priceOverrides) {
-      for (const p of priceOverrides) {
-        priceMap[p.provider_code] = {
-          price_sell: Number(p.price_sell),
-          markup_value: Number(p.markup_value || 0),
-          is_active: p.is_active !== false,
-        };
-      }
-    }
-
-    // Transform services (like bot's normalized services)
+    // Transform services — apply global markup to all services
     const services = rawServices.map((s: any) => {
       const serviceId = String(s.service || s.id);
       const platform = platformOf(s.name ?? '', s.category ?? '');
       const basePrice = Number(s.rate || s.price);
 
-      // Use custom price from DB if synced, otherwise apply default markup
-      const override = priceMap[serviceId];
-      let sellPrice: number;
-      if (override && override.markup_value > 0) {
-        sellPrice = Math.round(basePrice + override.markup_value);
-      } else {
-        sellPrice = Math.round(basePrice * (1 + markupPercent / 100)) + markupFlat;
-      }
+      // Global markup — same for all services
+      const sellPrice = Math.round(basePrice * (1 + markupPercent / 100)) + markupFlat;
 
       return {
         id: serviceId,
@@ -151,8 +128,7 @@ export async function GET() {
         is_cancelable: !!s.cancel,
         avg_time: s.avg_time || null,
         platform_icon_url: iconMap[platform] || null,
-        // If synced to DB and marked inactive, respect that
-        is_active: override ? override.is_active : true,
+        is_active: true,
       };
     });
 
