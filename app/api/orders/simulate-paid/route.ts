@@ -34,7 +34,7 @@ export async function POST(req: Request) {
 
   const { data: order } = await sb
     .from('orders')
-    .select('id, payment_status, user_id')
+    .select('id, payment_status, user_id, module')
     .eq('id', orderId)
     .single();
 
@@ -64,6 +64,22 @@ export async function POST(req: Request) {
 
   if (error) {
     return NextResponse.json({ error: 'Gagal: ' + error.message }, { status: 500 });
+  }
+
+  // Jika order SMM (sprintpedia), trigger proses otomatis ke SprintPedia
+  if (order.module === 'sprintpedia') {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'http://localhost:3000');
+      await fetch(`${baseUrl}/api/orders/submit-smm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId }),
+      });
+    } catch (err: any) {
+      console.error('[simulate-paid] Auto-submit SMM error:', err?.message || err);
+    }
   }
 
   return NextResponse.json({ ok: true, message: 'Pembayaran disimulasikan (mode uji)' });
