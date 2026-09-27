@@ -27,43 +27,59 @@ export default function SmmPanelOwnerPage() {
 
   // State untuk upload ikon platform
   const [editingIcon, setEditingIcon] = useState<string | null>(null); // nama platform
-  const [uploadingIcon, setUploadingIcon] = useState<string | null>(null); // nama platform yang sedang upload
-  const [liveCount, setLiveCount] = useState<number | null>(null); // jumlah layanan dari API live
+  const [uploadingIcon, setUploadingIcon] = useState<string | null>(null);
+  const [liveCount, setLiveCount] = useState<number | null>(null);
 
   const load = useCallback(async () => {
+    // 1) Live-fetch dari SprintPedia API (sama seperti store page)
+    try {
+      const res = await fetch('/api/store/smm-live');
+      const json = await res.json();
+      if (json.services && json.services.length > 0) {
+        // Map live services ke format SmmProduct
+        const liveRows: SmmProduct[] = json.services.map((s: any) => ({
+          id: s.id || s.provider_code,
+          name: s.name,
+          brand: s.brand,
+          price_modal: Number(s.price_modal) || 0,
+          price_sell: Number(s.price_sell) || 0,
+          markup_value: Number(s.price_sell) - Number(s.price_modal) || 0,
+          is_active: s.is_active !== false,
+          description: s.description || null,
+          provider_service_id: s.provider_code || s.id,
+          platform_icon_url: s.platform_icon_url || null,
+        }));
+        setRows(liveRows);
+        setLiveCount(json.total || liveRows.length);
+        return;
+      }
+    } catch { /* silent — fallback below */ }
+
+    // 2) Fallback: database
     const { data } = await sb.from('products').select('*')
       .eq('module', 'sprintpedia')
       .order('brand').order('price_modal');
     const dbRows = (data as SmmProduct[]) || [];
     setRows(dbRows);
 
-    // Cek jumlah layanan live dari SprintPedia API (seperti bot)
-    try {
-      const res = await fetch('/api/store/smm-live');
-      const json = await res.json();
-      if (json.total) setLiveCount(json.total);
-      else if (json.services) setLiveCount(json.services.length);
-    } catch { /* silent */ }
-
-    // Auto-sync jika database kosong (seperti bot yang auto-fetch)
+    // Auto-sync jika database juga kosong
     if (dbRows.length === 0) {
       setBusy(true);
-      setSyncResult('🔄 Database kosong, menyinkronkan otomatis dari SprintPedia...');
+      setSyncResult('🔄 Menyinkronkan otomatis dari SprintPedia...');
       try {
         const res = await fetch('/api/owner/products/sync-sprintpedia', { method: 'POST' });
         const syncData = await res.json();
         if (res.ok) {
-          setSyncResult(`✅ ${syncData.synced} layanan berhasil disinkronkan otomatis!`);
-          // Reload data
+          setSyncResult(`✅ ${syncData.synced} layanan disinkronkan!`);
           const { data: newData } = await sb.from('products').select('*')
             .eq('module', 'sprintpedia')
             .order('brand').order('price_modal');
           setRows((newData as SmmProduct[]) || []);
         } else {
-          setSyncResult(`❌ Auto-sync gagal: ${syncData.error}`);
+          setSyncResult(`❌ ${syncData.error}`);
         }
       } catch {
-        setSyncResult('❌ Auto-sync gagal');
+        setSyncResult('❌ Gagal sinkronkan');
       }
       setBusy(false);
       setTimeout(() => setSyncResult(null), 5000);
@@ -142,12 +158,9 @@ export default function SmmPanelOwnerPage() {
             <Share2 size={28} className="text-primary" /> SMM Panel
           </h2>
           <p className="text-sm text-on-surface-variant mt-1">
-            {rows.length} layanan di database · {rows.filter(r => r.is_active).length} aktif
-            {liveCount !== null && liveCount > rows.length && (
-              <span className="text-amber-600 font-semibold"> · {liveCount} tersedia di SprintPedia</span>
-            )}
-            {liveCount !== null && liveCount <= rows.length && (
-              <span className="text-accent-green font-semibold"> · ✅ Tersinkron</span>
+            {rows.length} layanan dari SprintPedia · {rows.filter(r => r.is_active).length} aktif
+            {liveCount !== null && (
+              <span className="text-accent-green font-semibold"> · Live API ✅</span>
             )}
           </p>
         </div>
