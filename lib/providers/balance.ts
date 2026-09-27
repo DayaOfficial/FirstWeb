@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { getDigiflazz, getSprint, fetchJson } from '@/lib/server-config';
-import { sprintProfile } from '@/lib/sprintpedia';
+import { sprintBalance } from '@/lib/sprintpedia';
 
 /**
  * Cek saldo deposit Digiflazz
@@ -62,10 +62,10 @@ export async function getSprintPediaBalance() {
   }
 
   try {
-    const json = await sprintProfile(cfg);
+    const json = await sprintBalance(cfg);
     return {
       provider: 'sprintpedia' as const,
-      balance: Number(json.data?.balance ?? 0),
+      balance: Number(json.data?.balance ?? json.balance ?? 0),
       currency: 'IDR',
       raw: json,
     };
