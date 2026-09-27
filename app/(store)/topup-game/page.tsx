@@ -23,7 +23,7 @@ export default async function TopUpGamePage() {
     .not('game_slug', 'is', null)
     .not('game_name', 'is', null);
 
-  // Ambil Robux/Vilog (produk manual)
+  // Ambil Robux Vilog (produk manual)
   const { data: robuxProducts } = await supabase
     .from('products')
     .select('id, name, image_url')
@@ -67,70 +67,96 @@ export default async function TopUpGamePage() {
         </p>
       </div>
 
-      {/* Grid */}
       {totalGames === 0 ? (
         <div className="text-center py-16 bg-surface-container-lowest rounded-2xl border border-outline-variant/30">
           <Gamepad2 size={48} className="mx-auto mb-4 text-on-surface-variant/30" />
           <p className="text-sm text-on-surface-variant font-semibold">Belum ada game tersedia.</p>
-          <p className="text-xs text-on-surface-variant mt-1">Owner perlu sync & aktifkan game di panel.</p>
+          <p className="text-xs text-on-surface-variant mt-1">Owner perlu sync &amp; aktifkan game di panel.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {/* Robux/Vilog card — manual via login */}
-          {hasRobux && (
-            <Link
-              href="/robux-vilog"
-              className="group bg-white rounded-2xl border border-surface-dim overflow-hidden shadow-soft shadow-hover-effect flex flex-col h-full cursor-pointer"
-            >
-              <div className="h-36 w-full relative overflow-hidden bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center">
-                {robuxImage ? (
-                  <img src={robuxImage} alt="Robux Vilog" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                ) : (
-                  <Gamepad2 size={32} className="text-purple-400" />
-                )}
-              </div>
-              <div className="p-3 flex-1 flex flex-col justify-between">
+        <div className="space-y-10">
+          {/* ══ SECTION: TOP UP OTOMATIS ══ */}
+          {games.length > 0 && (
+            <section className="space-y-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-secondary/10 rounded-lg">
+                  <Zap size={18} className="text-secondary" />
+                </div>
                 <div>
-                  <h3 className="font-bold text-sm text-on-surface leading-tight mb-0.5 group-hover:text-primary transition-colors">Robux / Vilog</h3>
-                  <p className="text-xs text-on-surface-variant">Roblox</p>
-                </div>
-                <div className="mt-2 flex items-center text-[10px] font-semibold text-purple-600 bg-purple-50 rounded-full px-2 py-1 w-fit border border-purple-200">
-                  <UserCheck size={12} className="mr-0.5" />
-                  Manual · via Login
+                  <h2 className="text-lg font-bold text-on-surface font-[family-name:var(--font-heading)]">Top Up Otomatis</h2>
+                  <p className="text-xs text-on-surface-variant">{games.length} game · Proses instan 24/7</p>
                 </div>
               </div>
-            </Link>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {games.map(g => (
+                  <Link
+                    key={g.game_slug}
+                    href={`/topup-game/${g.game_slug}`}
+                    className="group bg-white rounded-2xl border border-surface-dim overflow-hidden shadow-soft shadow-hover-effect flex flex-col h-full cursor-pointer"
+                  >
+                    <div className="h-36 w-full relative overflow-hidden bg-surface-variant flex items-center justify-center">
+                      {g.image_url ? (
+                        <img src={g.image_url} alt={g.game_name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      ) : (
+                        <Gamepad2 size={32} className="text-outline-variant" />
+                      )}
+                    </div>
+                    <div className="p-3 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h3 className="font-bold text-sm text-on-surface leading-tight mb-0.5 group-hover:text-primary transition-colors">{g.game_name}</h3>
+                        <p className="text-xs text-on-surface-variant truncate">{g.brand}</p>
+                      </div>
+                      <div className="mt-2 flex items-center text-[10px] font-semibold text-secondary bg-secondary-fixed/30 rounded-full px-2 py-1 w-fit">
+                        <Zap size={12} className="mr-0.5" />
+                        Proses Instan
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
           )}
 
-          {/* Digiflazz games */}
-          {games.map(g => (
-            <Link
-              key={g.game_slug}
-              href={`/topup-game/${g.game_slug}`}
-              className="group bg-white rounded-2xl border border-surface-dim overflow-hidden shadow-soft shadow-hover-effect flex flex-col h-full cursor-pointer"
-            >
-              <div className="h-36 w-full relative overflow-hidden bg-surface-variant flex items-center justify-center">
-                {g.image_url ? (
-                  <img src={g.image_url} alt={g.game_name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                ) : (
-                  <Gamepad2 size={32} className="text-outline-variant" />
-                )}
-              </div>
-              <div className="p-3 flex-1 flex flex-col justify-between">
+          {/* ══ SECTION: MANUAL — ROBUX VILOG ══ */}
+          {hasRobux && (
+            <section className="space-y-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <UserCheck size={18} className="text-purple-600" />
+                </div>
                 <div>
-                  <h3 className="font-bold text-sm text-on-surface leading-tight mb-0.5 group-hover:text-primary transition-colors">{g.game_name}</h3>
-                  <p className="text-xs text-on-surface-variant truncate">{g.brand}</p>
-                </div>
-                <div className="mt-2 flex items-center text-[10px] font-semibold text-secondary bg-secondary-fixed/30 rounded-full px-2 py-1 w-fit">
-                  <Zap size={12} className="mr-0.5" />
-                  Proses Instan
+                  <h2 className="text-lg font-bold text-on-surface font-[family-name:var(--font-heading)]">Manual — Robux Vilog</h2>
+                  <p className="text-xs text-on-surface-variant">Topup Robux via Login · Diproses manual oleh owner</p>
                 </div>
               </div>
-            </Link>
-          ))}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                <Link
+                  href="/robux-vilog"
+                  className="group bg-white rounded-2xl border border-surface-dim overflow-hidden shadow-soft shadow-hover-effect flex flex-col h-full cursor-pointer"
+                >
+                  <div className="h-36 w-full relative overflow-hidden bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center">
+                    {robuxImage ? (
+                      <img src={robuxImage} alt="Robux Vilog" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <Gamepad2 size={32} className="text-purple-400" />
+                    )}
+                  </div>
+                  <div className="p-3 flex-1 flex flex-col justify-between">
+                    <div>
+                      <h3 className="font-bold text-sm text-on-surface leading-tight mb-0.5 group-hover:text-primary transition-colors">Robux Vilog</h3>
+                      <p className="text-xs text-on-surface-variant">Roblox</p>
+                    </div>
+                    <div className="mt-2 flex items-center text-[10px] font-semibold text-purple-600 bg-purple-50 rounded-full px-2 py-1 w-fit border border-purple-200">
+                      <UserCheck size={12} className="mr-0.5" />
+                      Manual · via Login
+                    </div>
+                  </div>
+                </Link>
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>
   );
 }
-

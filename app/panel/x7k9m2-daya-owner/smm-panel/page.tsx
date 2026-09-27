@@ -28,12 +28,46 @@ export default function SmmPanelOwnerPage() {
   // State untuk upload ikon platform
   const [editingIcon, setEditingIcon] = useState<string | null>(null); // nama platform
   const [uploadingIcon, setUploadingIcon] = useState<string | null>(null); // nama platform yang sedang upload
+  const [liveCount, setLiveCount] = useState<number | null>(null); // jumlah layanan dari API live
 
   const load = useCallback(async () => {
     const { data } = await sb.from('products').select('*')
       .eq('module', 'sprintpedia')
       .order('brand').order('price_modal');
-    setRows((data as SmmProduct[]) || []);
+    const dbRows = (data as SmmProduct[]) || [];
+    setRows(dbRows);
+
+    // Cek jumlah layanan live dari SprintPedia API (seperti bot)
+    try {
+      const res = await fetch('/api/store/smm-live');
+      const json = await res.json();
+      if (json.total) setLiveCount(json.total);
+      else if (json.services) setLiveCount(json.services.length);
+    } catch { /* silent */ }
+
+    // Auto-sync jika database kosong (seperti bot yang auto-fetch)
+    if (dbRows.length === 0) {
+      setBusy(true);
+      setSyncResult('🔄 Database kosong, menyinkronkan otomatis dari SprintPedia...');
+      try {
+        const res = await fetch('/api/owner/products/sync-sprintpedia', { method: 'POST' });
+        const syncData = await res.json();
+        if (res.ok) {
+          setSyncResult(`✅ ${syncData.synced} layanan berhasil disinkronkan otomatis!`);
+          // Reload data
+          const { data: newData } = await sb.from('products').select('*')
+            .eq('module', 'sprintpedia')
+            .order('brand').order('price_modal');
+          setRows((newData as SmmProduct[]) || []);
+        } else {
+          setSyncResult(`❌ Auto-sync gagal: ${syncData.error}`);
+        }
+      } catch {
+        setSyncResult('❌ Auto-sync gagal');
+      }
+      setBusy(false);
+      setTimeout(() => setSyncResult(null), 5000);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -108,7 +142,13 @@ export default function SmmPanelOwnerPage() {
             <Share2 size={28} className="text-primary" /> SMM Panel
           </h2>
           <p className="text-sm text-on-surface-variant mt-1">
-            {rows.length} layanan · {rows.filter(r => r.is_active).length} aktif · Provider: SprintPedia
+            {rows.length} layanan di database · {rows.filter(r => r.is_active).length} aktif
+            {liveCount !== null && liveCount > rows.length && (
+              <span className="text-amber-600 font-semibold"> · {liveCount} tersedia di SprintPedia</span>
+            )}
+            {liveCount !== null && liveCount <= rows.length && (
+              <span className="text-accent-green font-semibold"> · ✅ Tersinkron</span>
+            )}
           </p>
         </div>
         <button onClick={sync} disabled={busy}
