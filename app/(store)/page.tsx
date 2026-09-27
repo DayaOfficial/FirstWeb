@@ -171,7 +171,8 @@ function CategoryGrid() {
     { icon: ShieldCheck, label: 'Nokos', href: '/nokos', bg: 'bg-green-50', color: 'text-accent-green', accent: 'bg-accent-green' },
     { icon: Share2, label: 'Sosial Media', href: '/smm-panel', bg: 'bg-pink-50', color: 'text-magenta-600', accent: 'bg-magenta-600' },
     { icon: Wallet, label: 'E-Wallet', href: '/ewallet', bg: 'bg-purple-50', color: 'text-accent-purple', accent: 'bg-accent-purple' },
-
+    { icon: Satellite, label: 'Robux & Vilog', href: '/robux-vilog', bg: 'bg-red-50', color: 'text-red-500', accent: 'bg-red-500' },
+    { icon: Satellite, label: 'Jasa Digital', href: '/jasa-digital', bg: 'bg-teal-50', color: 'text-teal-500', accent: 'bg-teal-500' },
   ];
 
   return (

@@ -25,9 +25,9 @@ export default function SmmPanelOwnerPage() {
   const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
   const [syncResult, setSyncResult] = useState<string | null>(null);
 
-  // State untuk edit ikon platform
+  // State untuk upload ikon platform
   const [editingIcon, setEditingIcon] = useState<string | null>(null); // nama platform
-  const [iconInput, setIconInput] = useState('');
+  const [uploadingIcon, setUploadingIcon] = useState<string | null>(null); // nama platform yang sedang upload
 
   const load = useCallback(async () => {
     const { data } = await sb.from('products').select('*')
@@ -77,7 +77,6 @@ export default function SmmPanelOwnerPage() {
       await sb.from('products').update({ platform_icon_url: trimmed || null }).eq('id', r.id);
     }
     setEditingIcon(null);
-    setIconInput('');
     await load();
   }
 
@@ -176,7 +175,6 @@ export default function SmmPanelOwnerPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   setEditingIcon(editingIcon === p ? null : p);
-                  setIconInput(currentIconUrl || '');
                 }}
                 className={`ml-2 p-2 rounded-lg text-xs font-medium transition-colors ${
                   currentIconUrl
@@ -189,40 +187,59 @@ export default function SmmPanelOwnerPage() {
               </button>
             </div>
 
-            {/* Panel edit ikon */}
+            {/* Panel upload ikon */}
             {editingIcon === p && (
               <div className="px-5 pb-4 pt-0 border-t border-outline-variant/20 animate-fade-in">
-                <div className="flex items-center gap-2 p-3 bg-surface-container-low rounded-xl">
-                  <ImageIcon size={14} className="text-on-surface-variant shrink-0" />
-                  <input
-                    type="text"
-                    value={iconInput}
-                    onChange={(e) => setIconInput(e.target.value)}
-                    placeholder="URL ikon/logo platform (contoh: https://...png)"
-                    className="flex-1 text-sm bg-transparent outline-none text-on-surface placeholder:text-on-surface-variant/50"
-                  />
-                  <button
-                    onClick={() => savePlatformIcon(p, iconInput)}
-                    className="px-3 py-1 rounded-lg gradient-primary text-white text-xs font-semibold hover:opacity-90 transition-all"
-                  >
-                    Simpan
-                  </button>
+                <div className="flex items-center gap-3 p-3 bg-surface-container-low rounded-xl">
+                  {currentIconUrl && (
+                    <img src={currentIconUrl} alt={p} className="w-10 h-10 rounded-lg object-contain border border-outline-variant/30 shrink-0" />
+                  )}
+                  <label className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/30 cursor-pointer hover:border-primary hover:bg-primary/5 transition-all text-sm font-medium text-on-surface">
+                    <ImageIcon size={16} className="text-primary" />
+                    {uploadingIcon === p ? 'Mengupload...' : currentIconUrl ? 'Ganti Ikon' : 'Upload Ikon'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingIcon === p}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 2 * 1024 * 1024) {
+                          alert('Ukuran gambar maksimal 2MB.');
+                          return;
+                        }
+                        setUploadingIcon(p);
+                        try {
+                          const ext = file.name.split('.').pop() || 'png';
+                          const path = `platform-icons/${p.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.${ext}`;
+                          const { error: upErr } = await sb.storage.from('brand-logos').upload(path, file, { upsert: true });
+                          if (upErr) {
+                            alert('Gagal upload: ' + upErr.message);
+                            return;
+                          }
+                          const { data: urlData } = sb.storage.from('brand-logos').getPublicUrl(path);
+                          await savePlatformIcon(p, urlData.publicUrl);
+                        } catch (err: any) {
+                          alert('Gagal upload ikon.');
+                          console.error(err);
+                        } finally {
+                          setUploadingIcon(null);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </label>
                   {currentIconUrl && (
                     <button
                       onClick={() => savePlatformIcon(p, '')}
-                      className="p-1 rounded-lg text-error hover:bg-error/10 transition-colors"
+                      className="px-3 py-2 rounded-lg text-xs font-semibold text-error border border-error/30 hover:bg-error/10 transition-colors"
                       title="Hapus ikon"
                     >
                       <X size={14} />
                     </button>
                   )}
                 </div>
-                {currentIconUrl && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-[11px] text-on-surface-variant">Preview:</span>
-                    <img src={currentIconUrl} alt={p} className="w-8 h-8 rounded object-contain border border-outline-variant/30" />
-                  </div>
-                )}
               </div>
             )}
 

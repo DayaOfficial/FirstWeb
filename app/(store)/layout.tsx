@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Menu, X, Home, Gamepad2, Crown, Smartphone, Zap,
-  ShieldCheck, Share2, Wallet, HelpCircle,
+  ShieldCheck, Share2, Wallet, HelpCircle, Satellite, Joystick,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/brand/Logo';
@@ -21,6 +21,8 @@ const STORE_NAV = [
   { href: '/nokos', label: 'Nokos', icon: ShieldCheck },
   { href: '/smm-panel', label: 'Sosial Media', icon: Share2 },
   { href: '/ewallet', label: 'E-Wallet', icon: Wallet },
+  { href: '/robux-vilog', label: 'Robux & Vilog', icon: Joystick },
+  { href: '/jasa-digital', label: 'Jasa Digital', icon: Satellite },
   { href: '/bantuan', label: 'Bantuan', icon: HelpCircle },
 ];
 

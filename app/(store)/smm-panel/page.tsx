@@ -114,14 +114,27 @@ export default function SMMPanelPage() {
   const [quantity, setQuantity] = useState('');
   const [ordering, setOrdering] = useState(false);
 
-  // Load produk SMM
+  // Load produk SMM — live-fetch dari SprintPedia API (seperti bot Telegram),
+  // lalu fallback ke database jika API gagal.
   useEffect(() => {
     (async () => {
-      // Try direct Supabase first
+      // 1) Live-fetch dari SprintPedia API (mirrors bot's fetchSprintServices)
+      try {
+        const res = await fetch('/api/store/smm-live');
+        const json = await res.json();
+        if (json.services && json.services.length > 0) {
+          setProducts(json.services as SMMProduct[]);
+          setLoading(false);
+          return;
+        }
+      } catch { /* silent — fallback below */ }
+
+      // 2) Fallback: database (synced products)
       const { data } = await supabase
         .from('products')
         .select('id, name, brand, price_sell, provider_code, description, min_qty, max_qty, smm_category, platform_icon_url, is_refillable, refill_days, service_type')
         .eq('module', 'sprintpedia')
+        .eq('is_active', true)
         .order('brand', { ascending: true });
 
       if (data && data.length > 0) {
@@ -130,7 +143,7 @@ export default function SMMPanelPage() {
         return;
       }
 
-      // Fallback: API route
+      // 3) Final fallback: old API route
       try {
         const res = await fetch('/api/store/smm-services');
         const json = await res.json();
