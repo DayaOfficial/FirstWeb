@@ -34,7 +34,8 @@ export async function syncSprintPedia(sb: ReturnType<typeof createServiceClient>
   }
 
   const json = await sprintServices(cfg);
-  const services = Array.isArray(json.data) ? json.data : [];
+  // API v2: bisa array langsung ATAU {data: [...]} — handle keduanya
+  const services = Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []);
   if (services.length === 0) {
     throw new Error('SprintPedia tidak mengembalikan layanan.');
   }
@@ -47,7 +48,7 @@ export async function syncSprintPedia(sb: ReturnType<typeof createServiceClient>
     const platform = platformOf(s.name ?? '', s.category ?? '');
     return {
       module: 'sprintpedia',
-      provider_code: String(s.id),
+      provider_code: String(s.service || s.id),
       name: s.name,
       brand: platform,
       category: 'SMM',
@@ -56,8 +57,8 @@ export async function syncSprintPedia(sb: ReturnType<typeof createServiceClient>
       description: s.description || null,
       min_qty: Number(s.min) || 10,
       max_qty: Number(s.max) || 100000,
-      price_modal: Number(s.price),
-      price_sell: Math.round(Number(s.price) * 1.3),
+      price_modal: Number(s.rate || s.price),
+      price_sell: Math.round(Number(s.rate || s.price) * 1.3),
       is_cancelable: !!s.cancel,
       is_refillable: !!s.refill,
       refill_days: Number(s.refill_days || 0),

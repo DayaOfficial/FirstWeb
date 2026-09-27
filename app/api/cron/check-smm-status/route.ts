@@ -73,7 +73,8 @@ export async function GET(req: Request) {
     try {
       const batchIds = ids.slice(i, i + 100);
       const res = await sprintStatusBulk(cfg, batchIds);
-      const statusMap = res.orders || {};
+      // API v2 response bisa: {orders: {...}}, atau langsung object keyed by ID, atau {data: {...}}
+      const statusMap = res.orders || res.data || (typeof res === 'object' && !Array.isArray(res) ? res : {});
 
       for (const o of orders.slice(i, i + 100)) {
         const s = statusMap[o.provider_ref];

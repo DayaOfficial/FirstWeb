@@ -61,7 +61,8 @@ export async function GET() {
     let rawServices: any[] = [];
     try {
       const json = await sprintServices(cfg);
-      rawServices = Array.isArray(json.data) ? json.data : [];
+      // API v2 bisa return array langsung ATAU {data: [...]} — handle keduanya (sama seperti bot)
+      rawServices = Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []);
     } catch (fetchErr) {
       console.error('[smm-live] SprintPedia fetch error:', fetchErr);
       // If we have cached data, return it
