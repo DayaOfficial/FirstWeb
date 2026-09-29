@@ -27,7 +27,7 @@ export async function processSmm(orderId: string): Promise<ProcessSmmResult> {
   // 1. Ambil order
   const { data: order, error: orderErr } = await sb
     .from('orders')
-    .select('id, module, product_id, buyer_input, target_input, quantity, process_status, provider_ref, meta')
+    .select('id, module, product_id, buyer_input, quantity, process_status, provider_ref, meta')
     .eq('id', orderId)
     .single();
 
@@ -89,7 +89,7 @@ export async function processSmm(orderId: string): Promise<ProcessSmmResult> {
   }
 
   // 4. Kirim order ke SprintPedia API
-  const target = order.buyer_input || order.target_input || '';
+  const target = order.buyer_input || '';
   const quantity = order.quantity || 100;
 
   console.log('[processSmm] Mengirim ke SprintPedia:', {

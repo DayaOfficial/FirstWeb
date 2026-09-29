@@ -63,8 +63,13 @@ export default function OwnerPesananPage() {
       const res = await fetch('/api/orders/retry-smm', { method: 'POST' });
       const data = await res.json();
       if (data.ok) {
-        setRetryResult(`✅ ${data.success} berhasil, ${data.failed} gagal dari ${data.total} order`);
-        loadOrders(); // Refresh
+        const errorDetails = (data.results || [])
+          .filter((r: any) => !r.ok)
+          .map((r: any) => `${r.order_code}: ${r.error}`)
+          .join('\n');
+        const msg = `✅ ${data.success} berhasil, ${data.failed} gagal dari ${data.total} order`;
+        setRetryResult(errorDetails ? `${msg}\n\n❌ Detail error:\n${errorDetails}` : msg);
+        loadOrders();
       } else {
         setRetryResult(`❌ ${data.error || 'Gagal retry'}`);
       }
@@ -123,7 +128,7 @@ export default function OwnerPesananPage() {
 
       {/* Retry result banner */}
       {retryResult && (
-        <div className="bg-surface-container-lowest rounded-xl p-3 border border-outline-variant/20 text-sm font-medium">
+        <div className="bg-surface-container-lowest rounded-xl p-3 border border-outline-variant/20 text-sm font-medium whitespace-pre-wrap">
           {retryResult}
         </div>
       )}
