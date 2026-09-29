@@ -53,6 +53,11 @@ const MODULES = [
   { value: 'manual_robux', label: 'Robux Vilog' },
 ];
 
+const moduleLabel = (mod: string) => {
+  const found = MODULES.find(m => m.value === mod);
+  return found?.label || mod;
+};
+
 function getStatusStyle(status: string) {
   const styles: Record<string, string> = {
     success: 'bg-accent-green/10 text-accent-green border-accent-green/30',
@@ -386,8 +391,8 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
                         <p className="text-xs font-mono font-semibold text-on-surface">{order.order_code}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Modul</p>
-                        <p className="text-xs font-semibold text-on-surface capitalize">{order.module || '-'}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Kategori</p>
+                        <p className="text-xs font-semibold text-on-surface">{moduleLabel(order.module)}</p>
                       </div>
                       <div>
                         <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Status Pembayaran</p>
@@ -417,33 +422,49 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
                           <p className="text-xs font-semibold text-on-surface break-all">{order.buyer_input}</p>
                         </div>
                       )}
-                      {order.module === 'sprintpedia' && order.quantity > 1 && (
+                      {order.module === 'sprintpedia' && order.quantity > 0 && (
                         <div>
                           <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Jumlah</p>
                           <p className="text-xs font-bold text-on-surface">{order.quantity.toLocaleString()}</p>
                         </div>
                       )}
-                      {order.meta?.smm_start_count != null && (
-                        <>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Start Count</p>
-                            <p className="text-xs font-bold text-on-surface">{order.meta.smm_start_count.toLocaleString()}</p>
-                          </div>
-                          {order.process_status === 'success' && order.quantity > 0 && (
+
+                      {/* SMM Progress — Start → Target */}
+                      {order.module === 'sprintpedia' && order.meta?.smm_start_count != null && (
+                        <div className="col-span-2 bg-surface-container-lowest rounded-xl p-3 border border-outline-variant/15 space-y-2">
+                          <p className="text-[10px] uppercase tracking-wider text-on-surface-variant font-semibold">Progress Suntik</p>
+                          <div className="flex items-center justify-between text-xs">
                             <div>
-                              <p className="text-[10px] uppercase tracking-wider text-accent-green mb-0.5">Hasil Akhir</p>
-                              <p className="text-xs font-bold text-accent-green">
-                                {(order.meta.smm_start_count + order.quantity).toLocaleString()}
-                                <span className="text-on-surface-variant font-normal"> (+{order.quantity.toLocaleString()})</span>
-                              </p>
+                              <span className="text-on-surface-variant">Start:</span>{' '}
+                              <span className="font-bold text-on-surface">{order.meta.smm_start_count.toLocaleString()}</span>
                             </div>
+                            <div className="text-primary font-bold">→</div>
+                            <div>
+                              <span className="text-on-surface-variant">Target:</span>{' '}
+                              <span className="font-bold text-on-surface">{(order.meta.smm_start_count + order.quantity).toLocaleString()}</span>
+                            </div>
+                          </div>
+                          {/* Progress bar */}
+                          {order.meta.smm_remains != null && (
+                            <>
+                              <div className="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-500"
+                                  style={{
+                                    width: `${Math.min(100, ((order.quantity - (order.meta.smm_remains || 0)) / order.quantity) * 100)}%`,
+                                    background: order.process_status === 'success' ? 'var(--accent-green)' : 'var(--primary)',
+                                  }}
+                                />
+                              </div>
+                              <div className="flex justify-between text-[10px] text-on-surface-variant">
+                                <span>Terkirim: {(order.quantity - (order.meta.smm_remains || 0)).toLocaleString()}/{order.quantity.toLocaleString()}</span>
+                                {order.meta.smm_remains > 0 && <span>Sisa: {order.meta.smm_remains.toLocaleString()}</span>}
+                              </div>
+                            </>
                           )}
-                        </>
-                      )}
-                      {order.meta?.smm_remains != null && order.meta.smm_remains > 0 && (
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wider text-on-surface-variant mb-0.5">Sisa</p>
-                          <p className="text-xs font-bold text-amber-600">{order.meta.smm_remains.toLocaleString()}</p>
+                          {order.process_status === 'success' && (
+                            <p className="text-xs font-bold text-accent-green flex items-center gap-1">✅ Selesai — {(order.meta.smm_start_count + order.quantity).toLocaleString()}</p>
+                          )}
                         </div>
                       )}
                     </div>
