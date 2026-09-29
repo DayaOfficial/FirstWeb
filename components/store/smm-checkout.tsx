@@ -124,7 +124,7 @@ export default function SMMCheckout({ services }: SMMCheckoutProps) {
 
             {filtered.length === 0 && (
               <p className="text-center text-sm text-on-surface-variant py-8">
-                Belum ada layanan SMM. Owner perlu sync dari SprintPedia di panel.
+                Belum ada layanan SMM. Owner perlu mengaktifkan layanan di panel.
               </p>
             )}
           </div>

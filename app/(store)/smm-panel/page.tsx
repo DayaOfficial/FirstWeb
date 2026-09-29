@@ -557,7 +557,7 @@ export default function SMMPanelPage() {
       {/* Stats */}
       {products.length > 0 && (
         <div className="text-center text-xs text-on-surface-variant/60">
-          {products.length.toLocaleString()} layanan tersedia • {platformsData.length - 1} platform • Powered by SprintPedia
+          {products.length.toLocaleString()} layanan tersedia • {platformsData.length - 1} platform
         </div>
       )}
     </div>
