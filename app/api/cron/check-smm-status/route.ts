@@ -15,14 +15,14 @@ import { sprintStatusBulk } from '@/lib/sprintpedia';
 
 // Mapping status SprintPedia ke status lokal
 function mapStatus(s: string): string {
-  switch (s) {
-    case 'Pending':    return 'pending';
-    case 'Processing': return 'processing';
-    case 'Success':    return 'success';
-    case 'Partial':    return 'partial';
-    case 'Error':      return 'failed';
-    default:           return 'processing';
-  }
+  const low = String(s).toLowerCase();
+  if (low === 'pending') return 'pending';
+  if (low === 'processing' || low === 'in progress') return 'processing';
+  if (low === 'success' || low === 'completed' || low === 'sukses') return 'success';
+  if (low === 'partial') return 'partial';
+  if (low === 'error') return 'failed';
+  if (low === 'canceled' || low === 'cancelled') return 'canceled';
+  return 'processing';
 }
 
 export async function GET(req: Request) {
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
     .from('orders')
     .select('id, provider_ref, process_status')
     .eq('module', 'sprintpedia')
-    .in('process_status', ['pending', 'processing', 'partial'])
+    .in('process_status', ['waiting', 'pending', 'processing', 'partial'])
     .not('provider_ref', 'is', null)
     .limit(200) as { data: { id: string; provider_ref: string; process_status: string }[] | null; error: any };
 

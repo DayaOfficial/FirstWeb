@@ -44,6 +44,7 @@ export async function POST(req: Request) {
       processing: 'processing',
       'in progress': 'processing',
       completed: 'success',
+      success: 'success',
       sukses: 'success',
       partial: 'success',
       error: 'failed',
