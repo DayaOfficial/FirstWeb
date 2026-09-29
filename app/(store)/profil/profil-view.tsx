@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ChevronRight, User, LayoutDashboard, KeyRound, LogOut,
-  Search, Filter, Camera, Trash2, Package, Loader2,
+  Search, Filter, Camera, Trash2, Package, Loader2, RefreshCw,
   Eye, EyeOff, X, CheckCircle2, AlertCircle, ShieldCheck, Clock
 } from 'lucide-react';
 import { formatRupiah, formatDate } from '@/lib/utils';
@@ -33,6 +33,7 @@ interface OrderRow {
   created_at: string;
   expires_at?: string;
   buyer_input?: string;
+  provider_ref?: string | null;
   meta?: {
     smm_provider_code?: string;
     smm_quantity?: number;
@@ -95,13 +96,82 @@ interface ProfilViewProps {
 export default function ProfilView({ profile: initialProfile, orders: initialOrders, isOwner }: ProfilViewProps) {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile>(initialProfile);
-  const [orders] = useState<OrderRow[]>(initialOrders);
+  const [orders, setOrders] = useState<OrderRow[]>(initialOrders);
   const [filterModule, setFilterModule] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCount, setShowCount] = useState(10);
   const [uploading, setUploading] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
+
+  // Auto-sync SMM order statuses saat halaman dibuka
+  useEffect(() => {
+    const smmOrders = initialOrders.filter(
+      o => o.module === 'sprintpedia' && 
+           o.payment_status === 'paid' && 
+           ['waiting', 'pending', 'processing'].includes(o.process_status) &&
+           o.provider_ref
+    );
+    if (smmOrders.length === 0) return;
+
+    const syncAll = async () => {
+      for (const order of smmOrders) {
+        try {
+          const res = await fetch('/api/orders/check-smm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order_id: order.id }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setOrders(prev => prev.map(o => {
+              if (o.id !== order.id) return o;
+              return {
+                ...o,
+                process_status: data.status,
+                meta: {
+                  ...o.meta,
+                  smm_start_count: data.start_count != null ? Number(data.start_count) : o.meta?.smm_start_count,
+                  smm_remains: data.remains != null ? Number(data.remains) : o.meta?.smm_remains,
+                },
+              };
+            }));
+          }
+        } catch { /* ignore */ }
+      }
+    };
+    syncAll();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Manual sync individual order
+  const handleSyncOrder = async (orderId: string) => {
+    setSyncingIds(prev => new Set(prev).add(orderId));
+    try {
+      const res = await fetch('/api/orders/check-smm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(prev => prev.map(o => {
+          if (o.id !== orderId) return o;
+          return {
+            ...o,
+            process_status: data.status,
+            meta: {
+              ...o.meta,
+              smm_start_count: data.start_count != null ? Number(data.start_count) : o.meta?.smm_start_count,
+              smm_remains: data.remains != null ? Number(data.remains) : o.meta?.smm_remains,
+            },
+          };
+        }));
+      }
+    } catch { /* ignore */ }
+    setSyncingIds(prev => { const n = new Set(prev); n.delete(orderId); return n; });
+  };
 
   // Password change modal state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -468,6 +538,18 @@ export default function ProfilView({ profile: initialProfile, orders: initialOrd
                         </div>
                       )}
                     </div>
+
+                    {/* Sync button for SMM orders */}
+                    {order.module === 'sprintpedia' && order.provider_ref && order.process_status !== 'success' && (
+                      <button
+                        onClick={() => handleSyncOrder(order.id)}
+                        disabled={syncingIds.has(order.id)}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        {syncingIds.has(order.id) ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                        {syncingIds.has(order.id) ? 'Menyinkronkan...' : 'Cek Status Terbaru'}
+                      </button>
+                    )}
 
                     {canResume && (
                       <Link

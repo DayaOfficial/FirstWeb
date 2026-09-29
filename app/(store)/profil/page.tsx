@@ -37,7 +37,7 @@ export default async function ProfilPage() {
   // Load orders
   const { data: orders } = await supabase
     .from('orders')
-    .select('id, order_code, product_name, module, amount, quantity, payment_status, process_status, created_at, expires_at, buyer_input, meta')
+    .select('id, order_code, product_name, module, amount, quantity, payment_status, process_status, created_at, expires_at, buyer_input, provider_ref, meta')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(100);
