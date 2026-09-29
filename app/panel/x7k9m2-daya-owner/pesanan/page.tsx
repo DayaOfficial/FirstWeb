@@ -1,6 +1,6 @@
 'use client';
 
-import { ShoppingCart, Search, Eye, Inbox, Loader2 } from 'lucide-react';
+import { ShoppingCart, Search, Eye, Inbox, Loader2, RefreshCw } from 'lucide-react';
 import { formatRupiah, cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -39,20 +39,40 @@ export default function OwnerPesananPage() {
   const [search, setSearch] = useState('');
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [retrying, setRetrying] = useState(false);
+  const [retryResult, setRetryResult] = useState<string | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from('orders')
-        .select('id, order_code, product_name, module, amount, buyer_name, payment_status, process_status, created_at')
-        .order('created_at', { ascending: false })
-        .limit(100);
-      setOrders((data as OrderRow[]) || []);
-      setLoading(false);
-    };
-    load();
-  }, []);
+  const loadOrders = async () => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from('orders')
+      .select('id, order_code, product_name, module, amount, buyer_name, payment_status, process_status, created_at')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    setOrders((data as OrderRow[]) || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadOrders(); }, []);
+
+  // Retry semua SMM yang stuck
+  const handleRetrySMM = async () => {
+    setRetrying(true);
+    setRetryResult(null);
+    try {
+      const res = await fetch('/api/orders/retry-smm', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        setRetryResult(`✅ ${data.success} berhasil, ${data.failed} gagal dari ${data.total} order`);
+        loadOrders(); // Refresh
+      } else {
+        setRetryResult(`❌ ${data.error || 'Gagal retry'}`);
+      }
+    } catch {
+      setRetryResult('❌ Gagal: kesalahan jaringan');
+    }
+    setRetrying(false);
+  };
 
   const filtered = orders.filter(o =>
     (o.order_code || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -63,6 +83,7 @@ export default function OwnerPesananPage() {
   const totalOrders = orders.length;
   const successCount = orders.filter(o => o.process_status === 'success').length;
   const processingCount = orders.filter(o => ['processing', 'waiting', 'pending'].includes(o.process_status)).length;
+  const stuckCount = orders.filter(o => o.module === 'sprintpedia' && o.payment_status === 'paid' && ['waiting', 'failed'].includes(o.process_status)).length;
   const canceledCount = orders.filter(o => ['canceled', 'failed'].includes(o.process_status)).length;
 
   const formatDate = (iso: string) => {
@@ -81,12 +102,31 @@ export default function OwnerPesananPage() {
           </h2>
           <p className="text-sm text-on-surface-variant mt-1">Kelola dan pantau semua pesanan masuk.</p>
         </div>
-        <div className="relative w-full sm:w-auto">
+        <div className="flex items-center gap-3">
+          {stuckCount > 0 && (
+            <button
+              onClick={handleRetrySMM}
+              disabled={retrying}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {retrying ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              Retry SMM ({stuckCount})
+            </button>
+          )}
+          <div className="relative w-full sm:w-auto">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
           <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Cari pesanan..."
             className="w-full sm:w-72 bg-surface-container-lowest border border-outline-variant rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
         </div>
+        </div>
       </div>
+
+      {/* Retry result banner */}
+      {retryResult && (
+        <div className="bg-surface-container-lowest rounded-xl p-3 border border-outline-variant/20 text-sm font-medium">
+          {retryResult}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
