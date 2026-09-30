@@ -86,5 +86,27 @@ export async function POST(req: Request) {
     });
   }
 
+  // Jika order Digiflazz, proses langsung
+  if (order.module === 'digiflazz') {
+    const { processDigiflazz } = await import('@/lib/process-digiflazz');
+    console.log('[simulate-paid] Memproses Digiflazz order:', orderId);
+    const digiResult = await processDigiflazz(orderId);
+    if (!digiResult.ok) {
+      console.error('[simulate-paid] Digiflazz gagal:', digiResult.error);
+      return NextResponse.json({
+        ok: true,
+        message: 'Pembayaran disimulasikan, tapi Digiflazz gagal: ' + digiResult.error,
+        digi_error: digiResult.error,
+      });
+    }
+    console.log('[simulate-paid] ✅ Digiflazz berhasil, ref_id:', digiResult.ref_id);
+    return NextResponse.json({
+      ok: true,
+      message: `Pembayaran disimulasikan & Digiflazz dikirim (SN: ${digiResult.sn || 'pending'})`,
+      ref_id: digiResult.ref_id,
+      sn: digiResult.sn,
+    });
+  }
+
   return NextResponse.json({ ok: true, message: 'Pembayaran disimulasikan (mode uji)' });
 }

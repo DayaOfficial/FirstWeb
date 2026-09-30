@@ -77,9 +77,20 @@ export async function POST(req: Request) {
     const smmResult = await processSmm(order.id);
     if (!smmResult.ok) {
       console.error('[webhook] SMM processing gagal:', smmResult.error);
-      // Order tetap paid, tapi process_status = 'failed'
     } else {
       console.log('[webhook] ✅ SMM berhasil dikirim, provider_ref:', smmResult.provider_ref);
+    }
+  }
+
+  // Jika order Digiflazz (topup game, pulsa, token dll), proses langsung
+  if (order.module === 'digiflazz') {
+    const { processDigiflazz } = await import('@/lib/process-digiflazz');
+    console.log('[webhook] Memproses Digiflazz order langsung:', order.id);
+    const digiResult = await processDigiflazz(order.id);
+    if (!digiResult.ok) {
+      console.error('[webhook] Digiflazz processing gagal:', digiResult.error);
+    } else {
+      console.log('[webhook] ✅ Digiflazz berhasil, ref_id:', digiResult.ref_id, 'SN:', digiResult.sn);
     }
   }
 
