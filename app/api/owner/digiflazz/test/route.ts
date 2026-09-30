@@ -20,7 +20,7 @@ export async function POST() {
   try {
     const sign = crypto
       .createHash('md5')
-      .update(cfg.username + cfg.apiKey + 'deposit')
+      .update(cfg.username + cfg.apiKey + 'depo')
       .digest('hex');
 
     const json = await fetchJson('https://api.digiflazz.com/v1/cek-saldo', {

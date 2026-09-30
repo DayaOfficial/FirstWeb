@@ -20,7 +20,7 @@ export async function getDigiflazzBalance() {
 
   const sign = crypto
     .createHash('md5')
-    .update(cfg.username + cfg.apiKey + 'deposit')
+    .update(cfg.username + cfg.apiKey + 'depo')
     .digest('hex');
 
   try {
