@@ -35,8 +35,13 @@ function mapCategory(cat: string): string {
   if (c.includes('games') || c.includes('voucher game')) return 'Game';
   if (c.includes('pulsa')) return 'Pulsa';
   if (c.includes('data')) return 'Data';
-  if (c.includes('pln') || c.includes('token')) return 'PLN';
+  if (c.includes('masa aktif')) return 'Pulsa';
+  if (c.includes('paket sms') || c.includes('sms & telpon')) return 'Pulsa';
+  if (c.includes('aktivasi perdana')) return 'Pulsa';
+  if (c.includes('pln') || c.includes('token listrik')) return 'PLN';
   if (c.includes('e-money') || c.includes('e-wallet') || c.includes('emoney')) return 'E-Wallet';
+  if (c.includes('tv') || c.includes('gas') || c.includes('pdam') || c.includes('bpjs') || c.includes('telkom') || c.includes('internet') || c.includes('pascabayar') || c.includes('pasca')) return 'Tagihan';
+  if (c.includes('voucher') || c.includes('aktivasi voucher')) return 'Voucher';
   return cat;
 }
 

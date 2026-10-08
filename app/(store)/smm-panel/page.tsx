@@ -430,7 +430,7 @@ export default function SMMPanelPage() {
               </option>
               {services.map(s => (
                 <option key={s.id} value={s.id}>
-                  {s.provider_code} - {s.name} {s.is_refillable ? `~ Refill ${s.refill_days || ''}Days` : '~ No Refill'} ~ Min {s.min_qty.toLocaleString()} ~ Max {s.max_qty.toLocaleString()} - ({formatRupiah(s.price_sell)}/1K)
+                  {s.name} {s.is_refillable ? `~ Refill ${s.refill_days || ''}Days` : '~ No Refill'} ~ Min {s.min_qty.toLocaleString()} ~ Max {s.max_qty.toLocaleString()} - ({formatRupiah(s.price_sell)}/1K)
                 </option>
               ))}
             </select>
@@ -446,7 +446,7 @@ export default function SMMPanelPage() {
               </div>
               <div className="flex flex-wrap gap-3 pt-1">
                 <span className="inline-flex items-center gap-1">
-                  <Hash size={10} /> ID: <strong>{selectedService.provider_code}</strong>
+                  <Zap size={10} /> Type: <strong>{selectedService.service_type || 'Default'}</strong>
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <Zap size={10} /> Min: <strong>{selectedService.min_qty.toLocaleString()}</strong>

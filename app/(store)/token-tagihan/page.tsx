@@ -10,7 +10,7 @@ export default async function TokenTagihanPage() {
     .from('products')
     .select('id, name, brand, price_sell, provider_code')
     .eq('module', 'digiflazz')
-    .in('category', ['PLN', 'Token', 'Tagihan'])
+    .in('category', ['PLN', 'Tagihan', 'Voucher'])
     .eq('is_active', true)
     .order('price_sell', { ascending: true });
 
