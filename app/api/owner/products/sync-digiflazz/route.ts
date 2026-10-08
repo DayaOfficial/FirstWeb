@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { fetchPriceList, type DigiflazzProduct } from '@/lib/providers/digiflazz';
+import { getSettings } from '@/lib/server-config';
 import { NextResponse } from 'next/server';
 
 export const maxDuration = 60;
@@ -79,6 +80,16 @@ export async function POST() {
       }, { status: 400 });
     }
 
+    // === Read global markup setting ===
+    const markupSettings = await getSettings(['digiflazz_markup_percent', 'digiflazz_markup_type']);
+    const markupType = markupSettings.digiflazz_markup_type || 'percent'; // 'percent' or 'nominal'
+    const markupValue = Number(markupSettings.digiflazz_markup_percent) || 15; // default 15%
+
+    function calcSellPrice(modal: number): number {
+      if (markupType === 'nominal') return Math.round(modal + markupValue);
+      return Math.round(modal * (1 + markupValue / 100));
+    }
+
     // === Build rows dari API response ===
     const allRows: Record<string, unknown>[] = [];
 
@@ -97,7 +108,7 @@ export async function POST() {
         brand: item.brand,
         category,
         price_modal: item.price,
-        price_sell: Math.round(item.price * 1.15),
+        price_sell: calcSellPrice(item.price),
         game_key: gameKey,
         game_slug: isGame ? slug(item.brand) : null,
         game_name: isGame ? item.brand : null,
@@ -118,7 +129,7 @@ export async function POST() {
         brand: item.brand,
         category,
         price_modal: adminFee,
-        price_sell: adminFee + 2500,
+        price_sell: calcSellPrice(adminFee),
         stock: 9999,
         synced_at: new Date().toISOString(),
       });

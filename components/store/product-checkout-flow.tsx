@@ -8,6 +8,28 @@ import { ChevronRight, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
+/* Brand color mapping for Digiflazz products */
+const BRAND_COLORS: Record<string, string> = {
+  'TELKOMSEL': '#ED1C24',
+  'INDOSAT': '#FFDD00',
+  'XL': '#0068B7',
+  'AXIS': '#6D2E8A',
+  'TRI': '#FF6600',
+  'SMARTFREN': '#F7941E',
+  'BY.U': '#00AEEF',
+  'DANA': '#118EEA',
+  'OVO': '#4C3494',
+  'GOPAY': '#00AAD2',
+  'SHOPEEPAY': '#EE4D2D',
+  'LINKAJA': '#E42313',
+  'PLN': '#1A73E8',
+  'GRAB': '#00B14F',
+  'MOBILE LEGENDS': '#2B5EA2',
+  'FREE FIRE': '#FF5722',
+  'PUBG MOBILE': '#F5A623',
+  'GENSHIN IMPACT': '#5C5C5C',
+};
+
 interface ProductItem {
   id: string;
   name: string;
@@ -47,6 +69,7 @@ export default function ProductCheckoutFlow({
   const [targetValue, setTargetValue] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+
 
   // Get unique brands
   const brands = [...new Set(products.map(p => p.brand).filter(Boolean))];
@@ -117,17 +140,22 @@ export default function ProductCheckoutFlow({
                   >
                     Semua
                   </button>
-                  {brands.map(b => (
-                    <button
-                      key={b}
-                      onClick={() => setBrandFilter(b)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                        brandFilter === b ? 'bg-primary text-white' : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
-                      }`}
-                    >
-                      {b}
-                    </button>
-                  ))}
+                  {brands.map(b => {
+                    const color = BRAND_COLORS[b.toUpperCase()] || '#6366F1';
+                    return (
+                      <button
+                        key={b}
+                        onClick={() => setBrandFilter(b)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                          brandFilter === b ? 'text-white' : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
+                        }`}
+                        style={brandFilter === b ? { backgroundColor: color } : undefined}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                        {b}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               {products.length > 8 && (

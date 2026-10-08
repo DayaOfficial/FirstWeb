@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Package, Search, Plus, Edit3, Trash2, Eye, EyeOff,
-  Loader2, X, Save, Upload, AlertCircle, ImageIcon
+  Loader2, X, Save, Upload, AlertCircle, ImageIcon, DollarSign, RefreshCw, CheckCircle2
 } from 'lucide-react';
 import { formatRupiah, cn } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/client';
 
 interface ProductData {
   id: string;
@@ -42,6 +43,15 @@ export default function OwnerProdukPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sb = createClient();
+
+  // Digiflazz markup
+  const [dgMarkupType, setDgMarkupType] = useState<'percent' | 'nominal'>('percent');
+  const [dgMarkupValue, setDgMarkupValue] = useState('15');
+  const [dgMarkupSaving, setDgMarkupSaving] = useState(false);
+  const [dgMarkupSaved, setDgMarkupSaved] = useState(false);
+  const [dgSyncing, setDgSyncing] = useState(false);
+  const [dgSyncMsg, setDgSyncMsg] = useState('');
 
   // Form fields
   const [formName, setFormName] = useState('');
@@ -68,7 +78,46 @@ export default function OwnerProdukPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadProducts(); }, [loadProducts]);
+  useEffect(() => { loadProducts(); loadDgMarkup(); }, [loadProducts]);
+
+  // Load Digiflazz markup from settings
+  async function loadDgMarkup() {
+    const { data } = await sb.from('settings').select('key, value').in('key', ['digiflazz_markup_percent', 'digiflazz_markup_type']);
+    for (const r of data || []) {
+      if (r.key === 'digiflazz_markup_percent') setDgMarkupValue(r.value || '15');
+      if (r.key === 'digiflazz_markup_type') setDgMarkupType((r.value as 'percent' | 'nominal') || 'percent');
+    }
+  }
+
+  // Save Digiflazz markup
+  async function saveDgMarkup() {
+    setDgMarkupSaving(true);
+    await sb.from('settings').upsert([
+      { key: 'digiflazz_markup_percent', value: dgMarkupValue },
+      { key: 'digiflazz_markup_type', value: dgMarkupType },
+    ], { onConflict: 'key' });
+    setDgMarkupSaved(true);
+    setTimeout(() => setDgMarkupSaved(false), 3000);
+    setDgMarkupSaving(false);
+  }
+
+  // Sync + apply markup
+  async function syncDigiflazz() {
+    setDgSyncing(true); setDgSyncMsg('');
+    await saveDgMarkup();
+    try {
+      const res = await fetch('/api/owner/products/sync-digiflazz', { method: 'POST' });
+      const d = await res.json();
+      if (res.ok) {
+        setDgSyncMsg(`✅ ${d.synced} produk disinkronkan!`);
+        loadProducts();
+      } else {
+        setDgSyncMsg(`❌ ${d.error}`);
+      }
+    } catch { setDgSyncMsg('❌ Gagal sinkronkan'); }
+    setDgSyncing(false);
+    setTimeout(() => setDgSyncMsg(''), 5000);
+  }
 
   const resetForm = () => {
     setFormName(''); setFormCategory(''); setFormBrand('');
@@ -240,6 +289,49 @@ export default function OwnerProdukPage() {
           className="px-5 py-2.5 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center gap-2">
           <Plus size={16} /> Tambah Produk
         </button>
+      </div>
+
+      {/* Digiflazz Markup & Sync Card */}
+      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-6 shadow-soft space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-on-surface font-[family-name:var(--font-heading)] flex items-center gap-2">
+            <DollarSign size={18} className="text-primary" /> Profit Digiflazz (Pulsa/Data/PLN/E-Wallet)
+          </h3>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3 items-end">
+          <div className="flex gap-2">
+            <button onClick={() => setDgMarkupType('percent')}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                dgMarkupType === 'percent' ? 'gradient-primary text-white border-transparent' : 'bg-surface-container-low text-on-surface-variant border-outline-variant'}`}>
+              Persentase (%)
+            </button>
+            <button onClick={() => setDgMarkupType('nominal')}
+              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                dgMarkupType === 'nominal' ? 'gradient-primary text-white border-transparent' : 'bg-surface-container-low text-on-surface-variant border-outline-variant'}`}>
+              Nominal (Rp)
+            </button>
+          </div>
+          <div className="flex-1 max-w-xs">
+            <input type="number" value={dgMarkupValue} onChange={e => setDgMarkupValue(e.target.value)} min={0}
+              placeholder={dgMarkupType === 'percent' ? '15' : '3000'}
+              className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-primary" />
+            <p className="text-[10px] text-on-surface-variant mt-1">
+              {dgMarkupType === 'percent' ? 'Harga jual = modal × (1 + %/100)' : 'Harga jual = modal + nominal'}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={saveDgMarkup} disabled={dgMarkupSaving}
+              className="px-4 py-2.5 rounded-xl bg-accent-green/90 text-white text-sm font-semibold hover:bg-accent-green transition-all flex items-center gap-2 disabled:opacity-50">
+              {dgMarkupSaved ? <><CheckCircle2 size={14} /> Tersimpan</> : <><Save size={14} /> Simpan</>}
+            </button>
+            <button onClick={syncDigiflazz} disabled={dgSyncing}
+              className="px-4 py-2.5 rounded-xl gradient-primary text-white text-sm font-semibold hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50">
+              {dgSyncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              {dgSyncing ? 'Sync...' : 'Sync & Terapkan'}
+            </button>
+          </div>
+        </div>
+        {dgSyncMsg && <p className="text-sm font-semibold">{dgSyncMsg}</p>}
       </div>
 
       {/* Form */}
