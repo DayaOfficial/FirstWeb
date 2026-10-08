@@ -2,11 +2,11 @@
 
 import { ApiProductManager } from '@/components/panel/api-product-manager';
 
-export default function PulsaDataTokenPage() {
+export default function TokenListrikPage() {
   return (
     <ApiProductManager
-      title="Pulsa & Data"
-      categories={['Pulsa', 'Data']}
+      title="Token Listrik & Tagihan"
+      categories={['PLN', 'Tagihan', 'Voucher']}
     />
   );
 }
