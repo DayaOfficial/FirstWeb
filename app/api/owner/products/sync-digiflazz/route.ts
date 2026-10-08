@@ -136,27 +136,23 @@ export async function POST() {
     for (const row of allRows) {
       const ex = existingMap.get(row.provider_code as string) as Record<string, unknown> | undefined;
       if (!ex) {
-        // Produk baru: default is_active=false (owner aktifkan manual)
-        toInsert.push({ ...row, is_active: false });
+        // Produk baru: otomatis aktif untuk buyer
+        toInsert.push({ ...row, is_active: true });
       } else {
-        // Existing: hanya update jika price_modal berubah, PERTAHANKAN owner overrides
-        if (Number(ex.price_modal) !== Number(row.price_modal)) {
-          toUpdate.push({
-            id: ex.id as string,
-            updates: {
-              name: row.name,
-              brand: row.brand,
-              category: row.category,
-              price_modal: row.price_modal,
-              stock: row.stock,
-              game_key: row.game_key,
-              game_slug: row.game_slug,
-              game_name: row.game_name,
-              synced_at: row.synced_at,
-              // PRESERVE: price_sell, is_active, image_url, profit_type, profit_value
-            },
-          });
-        }
+        // Existing: selalu update harga & info
+        const updates: Record<string, unknown> = {
+          name: row.name,
+          brand: row.brand,
+          category: row.category,
+          price_modal: row.price_modal,
+          stock: row.stock,
+          game_key: row.game_key,
+          game_slug: row.game_slug,
+          game_name: row.game_name,
+          synced_at: row.synced_at,
+          // PRESERVE: price_sell, is_active, image_url, profit_type, profit_value
+        };
+        toUpdate.push({ id: ex.id as string, updates });
       }
     }
 
