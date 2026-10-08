@@ -72,9 +72,38 @@ export async function getPakasir() {
 
 /**
  * Safe JSON fetch — prevents "Unexpected token '<'" errors.
- * If the response is not valid JSON (e.g. HTML 404), throws a descriptive error.
+ * If DIGIFLAZZ_PROXY_URL is set AND the target is api.digiflazz.com,
+ * routes through the proxy for fixed-IP whitelist compliance.
  */
 export async function fetchJson(url: string, body: Record<string, unknown>) {
+  const proxyUrl = process.env.DIGIFLAZZ_PROXY_URL;
+  const proxySecret = process.env.DIGIFLAZZ_PROXY_SECRET || '';
+
+  // Route through proxy if configured and target is Digiflazz
+  if (proxyUrl && url.startsWith('https://api.digiflazz.com/')) {
+    const proxyHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (proxySecret) {
+      proxyHeaders['Authorization'] = `Bearer ${proxySecret}`;
+    }
+
+    const res = await fetch(`${proxyUrl}/proxy`, {
+      method: 'POST',
+      headers: proxyHeaders,
+      body: JSON.stringify({ url, data: body }),
+    });
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(
+        `Proxy response bukan JSON (status ${res.status}). Awalan: ${text.substring(0, 120)}`
+      );
+    }
+  }
+
+  // Direct call (non-Digiflazz or no proxy)
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

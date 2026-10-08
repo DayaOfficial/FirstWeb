@@ -78,7 +78,8 @@ export async function POST() {
     const allRows: Record<string, unknown>[] = [];
 
     for (const item of prepaidItems) {
-      if (!item.buyer_product_status) continue;
+      // Include semua produk yang seller aktif (jangan filter buyer_product_status)
+      if (!item.seller_product_status) continue;
       const brandUpper = (item.brand ?? '').toUpperCase();
       const gameKey = BRAND_TO_GAMEKEY[brandUpper] ?? null;
       const category = mapCategory(item.category);
@@ -101,7 +102,7 @@ export async function POST() {
     }
 
     for (const item of pascaItems) {
-      if (!item.buyer_product_status) continue;
+      if (!item.seller_product_status) continue;
       const category = mapCategory(item.category) || 'Tagihan';
       const adminFee = Number(item.price) || 0;
 
