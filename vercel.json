@@ -9,8 +9,8 @@
       "schedule": "0 9 * * *"
     },
     {
-      "path": "/api/cron/check-balance",
-      "schedule": "0 15 * * *"
+      "path": "/api/cron/check-digiflazz-status",
+      "schedule": "0 21 * * *"
     }
   ]
 }
