@@ -6,7 +6,7 @@ import ConfirmationStep from '@/components/checkout/confirmation-step';
 import PaymentStep from '@/components/checkout/payment-step';
 import BrandImage from '@/components/ui/BrandImage';
 import { formatRupiah } from '@/lib/utils';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2, CheckCircle2, AlertCircle, User } from 'lucide-react';
 import Link from 'next/link';
 
 interface GameInfo {
@@ -14,6 +14,7 @@ interface GameInfo {
   slug: string;
   image: string;
   currency: string;
+  gameKey?: string;
 }
 
 interface InputField {
@@ -57,6 +58,15 @@ export default function GameTopUpFlow({ game, nominals, inputSchema }: GameTopUp
   const { state, actions } = useCheckout({ name: game.name, needs_target: true, id: nominals[0]?.id });
   const [inputs, setInputs] = useState<Record<string, string>>({});
 
+  // Validation state
+  const [validating, setValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState<{
+    valid: boolean;
+    username?: string;
+    error?: string;
+    warning?: string;
+  } | null>(null);
+
   const fields = inputSchema?.fields ?? [];
 
   function buildCustomerNo() {
@@ -68,6 +78,61 @@ export default function GameTopUpFlow({ game, nominals, inputSchema }: GameTopUp
   }
 
   const allFieldsFilled = fields.every(f => !f.required || (inputs[f.key] && inputs[f.key].trim()));
+
+  // Validasi ID game sebelum lanjut
+  async function validateAndProceed() {
+    if (!allFieldsFilled) return;
+
+    setValidating(true);
+    setValidationResult(null);
+
+    try {
+      const res = await fetch('/api/validate-game-id', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          game_key: game.gameKey || game.slug,
+          fields: inputs,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.valid) {
+        setValidationResult({
+          valid: true,
+          username: data.username,
+          warning: data.warning,
+        });
+        // Auto-proceed setelah 1 detik jika valid
+        setTimeout(() => {
+          actions.submitInput(buildCustomerNo());
+        }, data.username ? 1500 : 500);
+      } else {
+        setValidationResult({
+          valid: false,
+          error: data.error || 'Akun tidak ditemukan',
+        });
+      }
+    } catch {
+      // API error → izinkan lanjut dengan warning
+      setValidationResult({
+        valid: true,
+        warning: 'Validasi tidak tersedia. Pastikan ID benar.',
+      });
+      setTimeout(() => {
+        actions.submitInput(buildCustomerNo());
+      }, 1000);
+    }
+
+    setValidating(false);
+  }
+
+  // Reset validasi saat input berubah
+  function handleInputChange(key: string, value: string) {
+    setInputs({ ...inputs, [key]: value });
+    if (validationResult) setValidationResult(null);
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
@@ -94,7 +159,7 @@ export default function GameTopUpFlow({ game, nominals, inputSchema }: GameTopUp
                 <label className="text-sm font-semibold text-on-surface">{f.label}</label>
                 {f.type === 'select' ? (
                   <select
-                    onChange={e => setInputs({ ...inputs, [f.key]: e.target.value })}
+                    onChange={e => handleInputChange(f.key, e.target.value)}
                     value={inputs[f.key] || ''}
                     className="w-full mt-1 px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                   >
@@ -106,7 +171,7 @@ export default function GameTopUpFlow({ game, nominals, inputSchema }: GameTopUp
                     type={f.type === 'number' ? 'number' : f.type === 'email' ? 'email' : 'text'}
                     placeholder={f.placeholder}
                     value={inputs[f.key] || ''}
-                    onChange={e => setInputs({ ...inputs, [f.key]: e.target.value })}
+                    onChange={e => handleInputChange(f.key, e.target.value)}
                     className="w-full mt-1 px-4 py-3 rounded-xl border border-outline-variant bg-surface-container-lowest text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                   />
                 )}
@@ -114,15 +179,62 @@ export default function GameTopUpFlow({ game, nominals, inputSchema }: GameTopUp
               </div>
             ))}
           </div>
+
+          {/* Validation Result */}
+          {validationResult && (
+            <div className={`mt-4 p-4 rounded-xl border animate-fade-in ${
+              validationResult.valid
+                ? 'bg-green-50 border-green-200'
+                : 'bg-red-50 border-red-200'
+            }`}>
+              {validationResult.valid ? (
+                <div className="flex items-center gap-3">
+                  <CheckCircle2 size={20} className="text-green-600 flex-shrink-0" />
+                  <div>
+                    {validationResult.username ? (
+                      <>
+                        <p className="text-sm font-semibold text-green-800">Akun ditemukan!</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <User size={14} className="text-green-600" />
+                          <span className="text-sm font-bold text-green-700">{validationResult.username}</span>
+                        </div>
+                      </>
+                    ) : validationResult.warning ? (
+                      <p className="text-sm text-amber-700">{validationResult.warning}</p>
+                    ) : (
+                      <p className="text-sm text-green-700">ID valid, melanjutkan...</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <AlertCircle size={20} className="text-red-600 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-red-800">Akun tidak ditemukan</p>
+                    <p className="text-xs text-red-600 mt-0.5">{validationResult.error}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {state.error && (
             <p className="text-sm text-error mt-3">{state.error}</p>
           )}
+
           <button
-            disabled={!allFieldsFilled}
-            onClick={() => actions.submitInput(buildCustomerNo())}
-            className="mt-5 px-6 py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={!allFieldsFilled || validating}
+            onClick={validateAndProceed}
+            className="mt-5 px-6 py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Lanjut Pilih Nominal
+            {validating ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Memvalidasi ID...
+              </>
+            ) : (
+              'Cek Akun & Lanjut'
+            )}
           </button>
         </section>
       )}
@@ -133,10 +245,18 @@ export default function GameTopUpFlow({ game, nominals, inputSchema }: GameTopUp
           <StepTitle n={2} title={`Pilih Jumlah ${game.currency}`} />
 
           {/* Info akun */}
-          <div className="mb-4 p-3 rounded-xl bg-surface-container-high text-sm">
-            <span className="text-on-surface-variant">ID: </span>
-            <span className="font-semibold text-on-surface">{state.targetInput}</span>
-            <button onClick={actions.back} className="ml-3 text-primary text-xs font-semibold hover:underline">Ubah</button>
+          <div className="mb-4 p-3 rounded-xl bg-surface-container-high text-sm flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-on-surface-variant">ID:</span>
+              <span className="font-semibold text-on-surface">{state.targetInput}</span>
+              {validationResult?.username && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold border border-green-200">
+                  <User size={10} />
+                  {validationResult.username}
+                </span>
+              )}
+            </div>
+            <button onClick={() => { actions.back(); setValidationResult(null); }} className="text-primary text-xs font-semibold hover:underline">Ubah</button>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

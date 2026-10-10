@@ -156,6 +156,7 @@ export default async function GameDetailPage({ params }: { params: Promise<{ gam
           slug: gameSlug,
           image: imageUrl || '',
           currency,
+          gameKey,
         }}
         nominals={nominals}
         inputSchema={inputSchema}
