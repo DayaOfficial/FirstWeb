@@ -94,8 +94,8 @@ export async function POST() {
     const allRows: Record<string, unknown>[] = [];
 
     for (const item of prepaidItems) {
-      // Include semua produk yang seller aktif (jangan filter buyer_product_status)
-      if (!item.seller_product_status) continue;
+      // WAJIB: hanya include produk yang AKTIF di sisi seller DAN buyer
+      if (!item.seller_product_status || !item.buyer_product_status) continue;
       const brandUpper = (item.brand ?? '').toUpperCase();
       const gameKey = BRAND_TO_GAMEKEY[brandUpper] ?? null;
       const category = mapCategory(item.category);

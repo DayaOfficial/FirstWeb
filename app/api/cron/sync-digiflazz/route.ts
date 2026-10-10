@@ -74,7 +74,7 @@ export async function GET(req: Request) {
     const allRows: Record<string, unknown>[] = [];
 
     for (const item of prepaidItems) {
-      if (!item.seller_product_status) continue;
+      if (!item.seller_product_status || !item.buyer_product_status) continue;
       const brandUpper = (item.brand ?? '').toUpperCase();
       const gameKey = BRAND_TO_GAMEKEY[brandUpper] ?? null;
       const category = gameKey ? 'Game' : mapCategory(item.category ?? '');
