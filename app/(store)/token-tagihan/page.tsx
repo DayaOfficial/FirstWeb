@@ -8,10 +8,11 @@ export default async function TokenTagihanPage() {
 
   const { data: products } = await supabase
     .from('products')
-    .select('id, name, brand, price_sell, provider_code')
+    .select('id, name, brand, price_sell, provider_code, buyer_sku_code')
     .eq('module', 'digiflazz')
     .in('category', ['PLN', 'Tagihan', 'Voucher'])
     .eq('is_active', true)
+    .order('brand')
     .order('price_sell', { ascending: true });
 
   return (
@@ -26,10 +27,10 @@ export default async function TokenTagihanPage() {
         name: p.name,
         brand: p.brand ?? '',
         price_sell: Number(p.price_sell),
-        buyer_sku_code: p.provider_code ?? '',
+        buyer_sku_code: p.buyer_sku_code || p.provider_code || '',
       }))}
       category="Token & Tagihan"
-      showBrandFilter={false}
+      showBrandFilter={true}
     />
   );
 }

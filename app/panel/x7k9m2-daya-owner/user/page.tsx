@@ -168,7 +168,7 @@ export default function OwnerUserPage() {
         </div>
       </div>
 
-      {/* User Table */}
+      {/* User List */}
       <div className="bg-surface-container-lowest rounded-xl shadow-soft overflow-hidden border border-outline-variant/20">
         {loading ? (
           <div className="flex items-center justify-center py-20"><Loader2 size={32} className="animate-spin text-primary" /></div>
@@ -178,97 +178,152 @@ export default function OwnerUserPage() {
             <p className="text-on-surface-variant font-medium">Belum ada user terdaftar</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[700px]">
-              <thead>
-                <tr className="bg-surface-container/50 border-b border-outline-variant">
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">User</th>
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Email</th>
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Status</th>
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Tanggal Daftar</th>
-                  <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/50">
-                {filtered.map(user => {
-                  const sc = statusConfig[user.status] || statusConfig.pending;
-                  const StatusIcon = sc.icon;
-                  return (
-                    <tr key={user.id} className="hover:bg-surface-container-low transition-colors">
-                      <td className="py-3 px-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full gradient-primary text-white flex items-center justify-center text-xs font-bold">
-                            {(user.username || '??').slice(0, 2).toUpperCase()}
+          <>
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-surface-container/50 border-b border-outline-variant">
+                    <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">User</th>
+                    <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Email</th>
+                    <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Status</th>
+                    <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Tanggal Daftar</th>
+                    <th className="py-3 px-5 text-xs font-semibold text-on-surface-variant uppercase tracking-wider text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/50">
+                  {filtered.map(user => {
+                    const sc = statusConfig[user.status] || statusConfig.pending;
+                    const StatusIcon = sc.icon;
+                    return (
+                      <tr key={user.id} className="hover:bg-surface-container-low transition-colors">
+                        <td className="py-3 px-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full gradient-primary text-white flex items-center justify-center text-xs font-bold">
+                              {(user.username || '??').slice(0, 2).toUpperCase()}
+                            </div>
+                            <span className="text-sm font-semibold text-on-surface">{user.username || '-'}</span>
                           </div>
-                          <span className="text-sm font-semibold text-on-surface">{user.username || '-'}</span>
+                        </td>
+                        <td className="py-3 px-5 text-sm text-on-surface-variant">{user.email || '-'}</td>
+                        <td className="py-3 px-5">
+                          <span className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border', sc.color)}>
+                            <StatusIcon size={12} />{sc.label}
+                          </span>
+                        </td>
+                        <td className="py-3 px-5 text-sm text-on-surface-variant">{formatDate(user.created_at)}</td>
+                        <td className="py-3 px-5 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {user.status === 'pending' && (
+                              <>
+                                <button onClick={() => updateUserStatus(user.id, 'approved')} disabled={!!actionLoading}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200 text-xs font-semibold hover:bg-green-100 transition-colors disabled:opacity-50">
+                                  {actionLoading === `${user.id}_approved` ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />} Setujui
+                                </button>
+                                <button onClick={() => updateUserStatus(user.id, 'rejected')} disabled={!!actionLoading}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-semibold hover:bg-red-100 transition-colors disabled:opacity-50">
+                                  {actionLoading === `${user.id}_rejected` ? <Loader2 size={14} className="animate-spin" /> : <UserX size={14} />} Tolak
+                                </button>
+                              </>
+                            )}
+                            {user.status === 'approved' && (
+                              <>
+                                <button onClick={() => setConfirmDialog({ type: 'block', user })}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-xs font-semibold hover:bg-orange-100 transition-colors">
+                                  <Ban size={14} /> Blokir
+                                </button>
+                                <button onClick={() => setConfirmDialog({ type: 'delete', user })}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-semibold hover:bg-red-100 transition-colors">
+                                  <Trash2 size={14} /> Hapus
+                                </button>
+                              </>
+                            )}
+                            {user.status === 'blocked' && (
+                              <>
+                                <button onClick={() => setConfirmDialog({ type: 'unblock', user })}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold hover:bg-blue-100 transition-colors">
+                                  <ShieldOff size={14} /> Buka Blokir
+                                </button>
+                                <button onClick={() => setConfirmDialog({ type: 'delete', user })}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-semibold hover:bg-red-100 transition-colors">
+                                  <Trash2 size={14} /> Hapus
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden divide-y divide-outline-variant/30">
+              {filtered.map(user => {
+                const sc = statusConfig[user.status] || statusConfig.pending;
+                const StatusIcon = sc.icon;
+                return (
+                  <div key={user.id} className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full gradient-primary text-white flex items-center justify-center text-sm font-bold">
+                          {(user.username || '??').slice(0, 2).toUpperCase()}
                         </div>
-                      </td>
-                      <td className="py-3 px-5 text-sm text-on-surface-variant">{user.email || '-'}</td>
-                      <td className="py-3 px-5">
-                        <span className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border', sc.color)}>
-                          <StatusIcon size={12} />{sc.label}
-                        </span>
-                      </td>
-                      <td className="py-3 px-5 text-sm text-on-surface-variant">{formatDate(user.created_at)}</td>
-                      <td className="py-3 px-5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* Pending → Setujui / Tolak */}
-                          {user.status === 'pending' && (
-                            <>
-                              <button onClick={() => updateUserStatus(user.id, 'approved')} disabled={!!actionLoading}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200 text-xs font-semibold hover:bg-green-100 transition-colors disabled:opacity-50">
-                                {actionLoading === `${user.id}_approved` ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />} Setujui
-                              </button>
-                              <button onClick={() => updateUserStatus(user.id, 'rejected')} disabled={!!actionLoading}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-semibold hover:bg-red-100 transition-colors disabled:opacity-50">
-                                {actionLoading === `${user.id}_rejected` ? <Loader2 size={14} className="animate-spin" /> : <UserX size={14} />} Tolak
-                              </button>
-                            </>
-                          )}
-
-                          {/* Approved → Blokir / Hapus */}
-                          {user.status === 'approved' && (
-                            <>
-                              <button onClick={() => setConfirmDialog({ type: 'block', user })}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-xs font-semibold hover:bg-orange-100 transition-colors">
-                                <Ban size={14} /> Blokir
-                              </button>
-                              <button onClick={() => setConfirmDialog({ type: 'delete', user })}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-semibold hover:bg-red-100 transition-colors">
-                                <Trash2 size={14} /> Hapus
-                              </button>
-                            </>
-                          )}
-
-                          {/* Blocked → Buka Blokir / Hapus */}
-                          {user.status === 'blocked' && (
-                            <>
-                              <button onClick={() => setConfirmDialog({ type: 'unblock', user })}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-50 text-green-700 border border-green-200 text-xs font-semibold hover:bg-green-100 transition-colors">
-                                <ShieldOff size={14} /> Buka Blokir
-                              </button>
-                              <button onClick={() => setConfirmDialog({ type: 'delete', user })}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-semibold hover:bg-red-100 transition-colors">
-                                <Trash2 size={14} /> Hapus
-                              </button>
-                            </>
-                          )}
-
-                          {/* Rejected → Hapus */}
-                          {user.status === 'rejected' && (
-                            <button onClick={() => setConfirmDialog({ type: 'delete', user })}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-xs font-semibold hover:bg-red-100 transition-colors">
-                              <Trash2 size={14} /> Hapus
-                            </button>
-                          )}
+                        <div>
+                          <p className="text-sm font-semibold text-on-surface">{user.username || '-'}</p>
+                          <p className="text-xs text-on-surface-variant truncate max-w-[180px]">{user.email || '-'}</p>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                      <span className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border', sc.color)}>
+                        <StatusIcon size={12} />{sc.label}
+                      </span>
+                    </div>
+                    <p className="text-xs text-on-surface-variant">Daftar: {formatDate(user.created_at)}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {user.status === 'pending' && (
+                        <>
+                          <button onClick={() => updateUserStatus(user.id, 'approved')} disabled={!!actionLoading}
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-xl bg-green-50 text-green-700 border border-green-200 text-xs font-semibold disabled:opacity-50">
+                            {actionLoading === `${user.id}_approved` ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />} Setujui
+                          </button>
+                          <button onClick={() => updateUserStatus(user.id, 'rejected')} disabled={!!actionLoading}
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-semibold disabled:opacity-50">
+                            {actionLoading === `${user.id}_rejected` ? <Loader2 size={14} className="animate-spin" /> : <UserX size={14} />} Tolak
+                          </button>
+                        </>
+                      )}
+                      {user.status === 'approved' && (
+                        <>
+                          <button onClick={() => setConfirmDialog({ type: 'block', user })}
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-xl bg-orange-50 text-orange-700 border border-orange-200 text-xs font-semibold">
+                            <Ban size={14} /> Blokir
+                          </button>
+                          <button onClick={() => setConfirmDialog({ type: 'delete', user })}
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-semibold">
+                            <Trash2 size={14} /> Hapus
+                          </button>
+                        </>
+                      )}
+                      {user.status === 'blocked' && (
+                        <>
+                          <button onClick={() => setConfirmDialog({ type: 'unblock', user })}
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-xs font-semibold">
+                            <ShieldOff size={14} /> Buka Blokir
+                          </button>
+                          <button onClick={() => setConfirmDialog({ type: 'delete', user })}
+                            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-semibold">
+                            <Trash2 size={14} /> Hapus
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 

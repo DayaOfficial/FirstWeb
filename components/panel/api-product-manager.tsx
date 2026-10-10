@@ -4,11 +4,11 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
   RefreshCw, Image as ImgIcon, Search, ChevronDown, ChevronRight, Check,
-  DollarSign, Save, CheckCircle2, Loader2, Upload, X
+  Percent, Save, Loader2, Upload, X
 } from 'lucide-react';
 
-const calcSell = (modal: number, type: string, val: number) =>
-  type === 'percent' ? Math.round(modal * (1 + val / 100)) : modal + val;
+const calcSell = (modal: number, pct: number) =>
+  Math.round(modal * (1 + pct / 100));
 
 /* Brand color mapping */
 const BRAND_COLORS: Record<string, string> = {
@@ -44,10 +44,10 @@ export function ApiProductManager({ categories, title }: { categories: string[];
   const [expandedBrands, setExpandedBrands] = useState<Set<string>>(new Set());
   const [syncResult, setSyncResult] = useState<string | null>(null);
 
-  // Global markup
-  const [markupType, setMarkupType] = useState<'percent' | 'nominal'>('percent');
-  const [markupValue, setMarkupValue] = useState('15');
-  const [markupSaving, setMarkupSaving] = useState(false);
+  // Global markup — persis seperti SMM panel (hanya persentase)
+  const [markupPercent, setMarkupPercent] = useState<number>(15);
+  const [markupInput, setMarkupInput] = useState<string>('15');
+  const [savingMarkup, setSavingMarkup] = useState(false);
   const [markupSaved, setMarkupSaved] = useState(false);
 
   // Brand image upload
@@ -62,64 +62,55 @@ export function ApiProductManager({ categories, title }: { categories: string[];
     setRows((data as Product[]) || []);
   }, [categories]);
 
-  // Load global markup
+  // Load global markup from settings
   const loadMarkup = useCallback(async () => {
-    const { data } = await sb.from('settings').select('key, value')
-      .in('key', ['digiflazz_markup_percent', 'digiflazz_markup_type']);
-    for (const r of data || []) {
-      if (r.key === 'digiflazz_markup_percent') setMarkupValue(r.value || '15');
-      if (r.key === 'digiflazz_markup_type') setMarkupType((r.value as 'percent' | 'nominal') || 'percent');
+    const { data } = await sb.from('settings').select('value').eq('key', 'digiflazz_markup_percent').single();
+    if (data?.value) {
+      const val = Number(data.value);
+      setMarkupPercent(val);
+      setMarkupInput(String(val));
     }
   }, []);
 
   useEffect(() => { load(); loadMarkup(); }, [load, loadMarkup]);
 
-  // Save global markup
-  async function saveMarkup() {
-    setMarkupSaving(true);
-    await sb.from('settings').upsert([
-      { key: 'digiflazz_markup_percent', value: markupValue },
-      { key: 'digiflazz_markup_type', value: markupType },
-    ], { onConflict: 'key' });
-    setMarkupSaved(true);
-    setTimeout(() => setMarkupSaved(false), 3000);
-    setMarkupSaving(false);
-  }
-
-  // Save markup + sync all
-  async function saveAndSync() {
-    setBusy(true);
-    setSyncResult(null);
-    await saveMarkup();
+  // Save global markup — persis seperti SMM panel
+  async function saveGlobalMarkup() {
+    const val = Number(markupInput);
+    if (isNaN(val) || val < 0 || val > 1000) {
+      alert('Markup harus antara 0-1000%');
+      return;
+    }
+    setSavingMarkup(true);
     try {
-      const res = await fetch('/api/owner/products/sync-digiflazz', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        setSyncResult(`✅ ${data.synced} produk disinkronkan dengan markup ${markupType === 'percent' ? markupValue + '%' : 'Rp ' + Number(markupValue).toLocaleString('id-ID')}`);
-      } else {
-        setSyncResult(`❌ ${data.error}`);
+      // Simpan ke settings
+      await sb.from('settings').upsert(
+        { key: 'digiflazz_markup_percent', value: String(val) },
+        { onConflict: 'key' }
+      );
+      await sb.from('settings').upsert(
+        { key: 'digiflazz_markup_type', value: 'percent' },
+        { onConflict: 'key' }
+      );
+      setMarkupPercent(val);
+
+      // Apply ke semua produk di halaman ini
+      for (const r of rows) {
+        const newSell = calcSell(r.price_modal, val);
+        await sb.from('products').update({
+          price_sell: newSell,
+          markup_type: 'percent',
+          markup_value: val,
+        }).eq('id', r.id);
       }
+
+      setMarkupSaved(true);
+      setTimeout(() => setMarkupSaved(false), 3000);
       await load();
     } catch {
-      setSyncResult('❌ Gagal sinkronkan');
+      alert('Gagal menyimpan markup');
     }
-    setBusy(false);
-    setTimeout(() => setSyncResult(null), 6000);
-  }
-
-  // Apply markup to visible category only (without sync)
-  async function applyMarkupLocal() {
-    setMarkupSaving(true);
-    await saveMarkup();
-    const val = Number(markupValue);
-    for (const r of rows) {
-      const newSell = calcSell(r.price_modal, markupType, val);
-      await sb.from('products').update({ price_sell: newSell, markup_type: markupType, markup_value: val }).eq('id', r.id);
-    }
-    await load();
-    setMarkupSaved(true);
-    setTimeout(() => setMarkupSaved(false), 3000);
-    setMarkupSaving(false);
+    setSavingMarkup(false);
   }
 
   async function sync() {
@@ -146,21 +137,20 @@ export function ApiProductManager({ categories, title }: { categories: string[];
     load();
   }
 
-  async function onMarkup(r: Product, type: string, val: number) {
+  async function onMarkup(r: Product, val: number) {
     await patch(r.id, {
-      markup_type: type,
+      markup_type: 'percent',
       markup_value: val,
-      price_sell: calcSell(r.price_modal, type, val),
+      price_sell: calcSell(r.price_modal, val),
     });
   }
 
-  // Upload image per BRAND (applied to all products of that brand)
+  // Upload image per BRAND
   async function onBrandImage(brand: string, file: File) {
     setUploadingBrand(brand);
     const path = `brands/${brand.toLowerCase().replace(/\s+/g, '-')}.webp`;
     await sb.storage.from('brand-logos').upload(path, file, { upsert: true });
     const url = sb.storage.from('brand-logos').getPublicUrl(path).data.publicUrl;
-    // Apply to all products with this brand
     const brandRows = rows.filter(r => r.brand === brand);
     for (const r of brandRows) {
       await sb.from('products').update({ image_url: url }).eq('id', r.id);
@@ -202,56 +192,50 @@ export function ApiProductManager({ categories, title }: { categories: string[];
         </button>
       </div>
 
-      {/* ═══ GLOBAL MARKUP CARD ═══ */}
-      <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-5 shadow-soft space-y-4">
-        <h3 className="text-sm font-bold text-on-surface flex items-center gap-2">
-          <DollarSign size={16} className="text-primary" /> Atur Profit Markup Global
-        </h3>
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
-          {/* Type toggle */}
-          <div className="flex gap-2">
-            <button onClick={() => setMarkupType('percent')}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                markupType === 'percent' ? 'gradient-primary text-white border-transparent' : 'bg-surface-container-low text-on-surface-variant border-outline-variant'
-              }`}>
-              Persentase (%)
-            </button>
-            <button onClick={() => setMarkupType('nominal')}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                markupType === 'nominal' ? 'gradient-primary text-white border-transparent' : 'bg-surface-container-low text-on-surface-variant border-outline-variant'
-              }`}>
-              Nominal (Rp)
-            </button>
-          </div>
-          {/* Value input */}
-          <div className="flex-1 max-w-[200px]">
-            <input type="number" value={markupValue} onChange={e => setMarkupValue(e.target.value)} min={0}
-              placeholder={markupType === 'percent' ? '15' : '3000'}
-              className="w-full bg-surface-container-low border border-outline-variant rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-primary transition-all" />
-            <p className="text-[10px] text-on-surface-variant mt-1">
-              {markupType === 'percent' ? `Jual = modal × (1 + ${markupValue || 0}%)` : `Jual = modal + Rp ${Number(markupValue || 0).toLocaleString('id-ID')}`}
-            </p>
-          </div>
-          {/* Buttons */}
-          <div className="flex gap-2">
-            <button onClick={applyMarkupLocal} disabled={markupSaving}
-              className="px-4 py-2 rounded-xl bg-accent-green/90 text-white text-xs font-semibold hover:bg-accent-green transition-all flex items-center gap-1.5 disabled:opacity-50">
-              {markupSaved ? <><CheckCircle2 size={13} /> Tersimpan!</> : markupSaving ? <><Loader2 size={13} className="animate-spin" /> Menerapkan...</> : <><Save size={13} /> Terapkan</>}
-            </button>
-            <button onClick={saveAndSync} disabled={busy}
-              className="px-4 py-2 rounded-xl gradient-primary text-white text-xs font-semibold hover:opacity-90 transition-all flex items-center gap-1.5 disabled:opacity-50">
-              {busy ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-              Sync + Markup
-            </button>
-          </div>
-        </div>
-      </div>
-
       {syncResult && (
         <div className={`text-sm px-4 py-2.5 rounded-xl animate-fade-in ${syncResult.startsWith('✅') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
           {syncResult}
         </div>
       )}
+
+      {/* ═══════ PENGATURAN PROFIT GLOBAL — SAMA SEPERTI SMM PANEL ═══════ */}
+      <div className="rounded-2xl bg-surface-container-lowest border border-outline-variant/20 shadow-soft p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Percent size={18} className="text-primary" />
+          <h3 className="font-bold text-on-surface text-sm">Pengaturan Profit Global</h3>
+        </div>
+        <p className="text-xs text-on-surface-variant mb-4">
+          Atur persentase profit untuk <strong>semua layanan</strong> sekaligus. Harga jual = Harga modal + {markupPercent}% markup.
+        </p>
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-xs">
+            <input
+              type="number"
+              value={markupInput}
+              onChange={e => setMarkupInput(e.target.value)}
+              min={0}
+              max={1000}
+              className="w-full px-4 py-3 pr-12 rounded-xl bg-surface-container-low border border-outline-variant/30 text-sm font-bold text-on-surface outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+              placeholder="15"
+            />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-on-surface-variant">%</span>
+          </div>
+          <button
+            onClick={saveGlobalMarkup}
+            disabled={savingMarkup || markupInput === String(markupPercent)}
+            className="flex items-center gap-2 px-5 py-3 rounded-xl gradient-primary text-white text-sm font-semibold hover:opacity-90 transition-all disabled:opacity-40"
+          >
+            <Save size={14} />
+            {savingMarkup ? 'Menyimpan...' : 'Simpan'}
+          </button>
+          {markupSaved && (
+            <span className="text-sm text-accent-green font-semibold animate-fade-in">✅ Tersimpan!</span>
+          )}
+        </div>
+        <div className="mt-3 p-3 bg-primary/5 rounded-xl text-xs text-on-surface-variant">
+          <strong>Contoh:</strong> Harga modal Rp 10.000 + markup {markupInput || 0}% = <strong className="text-primary">Rp {calcSell(10000, Number(markupInput || 0)).toLocaleString('id-ID')}</strong>
+        </div>
+      </div>
 
       {/* Search */}
       <div className="relative max-w-md">
@@ -287,8 +271,6 @@ export function ApiProductManager({ categories, title }: { categories: string[];
                 className="flex items-center gap-3 flex-1 text-left"
               >
                 {isExpanded ? <ChevronDown size={18} className="text-primary" /> : <ChevronRight size={18} className="text-on-surface-variant" />}
-
-                {/* Brand icon/image */}
                 {brandImg ? (
                   <img src={brandImg} alt={b} className="w-9 h-9 rounded-xl object-cover border border-outline-variant/30" />
                 ) : (
@@ -297,18 +279,14 @@ export function ApiProductManager({ categories, title }: { categories: string[];
                     {brandInitials(b)}
                   </div>
                 )}
-
                 <span className="font-bold text-on-surface">{b}</span>
                 <span className="text-xs text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
                   {brandRows.length} produk · {activeCount} aktif
                 </span>
               </button>
-
-              {/* Brand image upload button */}
               <button
-                onClick={() => { setBrandImageModal(b); }}
+                onClick={() => setBrandImageModal(b)}
                 className="ml-2 px-3 py-1.5 rounded-lg bg-surface-container-high border border-outline-variant/30 text-xs font-medium text-on-surface-variant hover:border-primary hover:text-primary transition-all flex items-center gap-1.5"
-                title="Upload gambar brand"
               >
                 <Upload size={12} />
                 {brandImg ? 'Ganti' : 'Gambar'}
@@ -317,6 +295,7 @@ export function ApiProductManager({ categories, title }: { categories: string[];
 
             {isExpanded && (
               <div className="border-t border-outline-variant/20">
+                {/* Desktop header */}
                 <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-2 text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider bg-surface-container-high/50">
                   <span className="col-span-4">Produk</span>
                   <span className="col-span-2">Modal</span>
@@ -337,7 +316,7 @@ export function ApiProductManager({ categories, title }: { categories: string[];
                         <input
                           type="number"
                           defaultValue={r.markup_value}
-                          onBlur={e => onMarkup(r, r.markup_type || 'nominal', Number(e.target.value))}
+                          onBlur={e => onMarkup(r, Number(e.target.value))}
                           className="w-20 px-2 py-1.5 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary transition-colors"
                         />
                       </div>
@@ -370,7 +349,7 @@ export function ApiProductManager({ categories, title }: { categories: string[];
         );
       })}
 
-      {/* ═══ BRAND IMAGE UPLOAD MODAL ═══ */}
+      {/* Brand Image Upload Modal */}
       {brandImageModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in"
           onClick={() => setBrandImageModal(null)}>
@@ -384,13 +363,9 @@ export function ApiProductManager({ categories, title }: { categories: string[];
                 <X size={16} />
               </button>
             </div>
-
             <p className="text-xs text-on-surface-variant mb-4">
-              Gambar ini akan diterapkan ke <strong>semua produk</strong> dengan brand &quot;{brandImageModal}&quot;.
-              <br />Format: JPG/PNG/WebP, maks 2MB.
+              Gambar diterapkan ke <strong>semua produk</strong> brand &quot;{brandImageModal}&quot;. Format: JPG/PNG/WebP, maks 2MB.
             </p>
-
-            {/* Current brand image */}
             <div className="flex items-center gap-3 mb-4">
               {rows.find(r => r.brand === brandImageModal)?.image_url ? (
                 <img src={rows.find(r => r.brand === brandImageModal)!.image_url!} alt="" className="w-16 h-16 rounded-xl object-cover border" />
@@ -404,7 +379,6 @@ export function ApiProductManager({ categories, title }: { categories: string[];
                 {rows.find(r => r.brand === brandImageModal)?.image_url ? 'Gambar saat ini' : 'Belum ada gambar'}
               </span>
             </div>
-
             <input ref={brandFileRef} type="file" accept="image/*" className="hidden"
               onChange={e => {
                 const f = e.target.files?.[0];
@@ -413,7 +387,6 @@ export function ApiProductManager({ categories, title }: { categories: string[];
                 onBrandImage(brandImageModal, f);
               }}
             />
-
             <button
               onClick={() => brandFileRef.current?.click()}
               disabled={uploadingBrand === brandImageModal}
