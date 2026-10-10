@@ -77,6 +77,12 @@ export async function POST(req: Request) {
     meta.smm_service_name = nominal_name || product_name;
   }
 
+  // Build metadata for Digiflazz orders — store buyer_sku_code for processDigiflazz
+  if (module === 'digiflazz' && nominal_code) {
+    meta.buyer_sku_code = nominal_code;
+    meta.customer_no = target_input || '';
+  }
+
   const { data: order, error } = await serviceSupabase
     .from('orders')
     .insert({

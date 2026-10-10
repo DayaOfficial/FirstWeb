@@ -79,8 +79,8 @@ export function useCheckout(product: CheckoutProduct | null) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            product_id: state.product?.id,
-            product_name: state.product?.name,
+            product_id: state.nominal?.id || state.product?.id,
+            product_name: state.nominal?.name || state.product?.name,
             target_input: state.targetInput,
             duration: state.duration,
             nominal_code: state.nominal?.buyer_sku_code || state.nominal?.provider_code,
