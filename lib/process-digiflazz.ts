@@ -127,19 +127,35 @@ export async function processDigiflazz(orderId: string): Promise<{
       const d = json.data;
       console.log('[processDigiflazz] Response:', JSON.stringify(d));
 
+      // Response kosong = proxy/API error
+      if (!d || typeof d !== 'object') {
+        console.error('[processDigiflazz] Response kosong/invalid:', JSON.stringify(json));
+        lastError = 'Response Digiflazz kosong atau tidak valid';
+        continue;
+      }
+
       // Jika signature salah, coba key berikutnya
-      if (d?.rc === '41' && keysToTry.length > 1) {
+      if (d.rc === '41' && keysToTry.length > 1) {
         console.log('[processDigiflazz] Signature salah, mencoba key lain...');
-        lastError = d?.message || 'Signature salah';
+        lastError = d.message || 'Signature salah';
+        continue;
+      }
+
+      // Jika IP tidak dikenali, coba key berikutnya
+      if (d.rc === '45') {
+        console.error('[processDigiflazz] IP tidak dikenali:', d.message);
+        lastError = d.message || 'IP tidak dikenali';
         continue;
       }
 
       // Map Digiflazz status ke internal status
-      const statusRaw = String(d?.status || '').toLowerCase();
+      const statusRaw = String(d.status || '').toLowerCase();
       let processStatus = 'processing';
       if (statusRaw === 'sukses') processStatus = 'success';
       else if (statusRaw === 'gagal') processStatus = 'failed';
       else if (statusRaw === 'pending') processStatus = 'processing';
+      // Jika status tidak dikenali dan tidak ada SN, anggap gagal
+      else if (!statusRaw && !d.sn) processStatus = 'failed';
 
       // Update order
       await sb.from('orders').update({
