@@ -30,12 +30,14 @@ const PROVIDERS: ProviderDef[] = [
     settingsMap: {
       username: 'digiflazz_username',
       apiKey: 'digiflazz_api_key',
+      prodKey: 'digiflazz_prod_key',
       nomorTujuan: 'digiflazz_nomor_tujuan',
       kodeProduk: 'digiflazz_kode_produk',
     },
     fields: [
       { key: 'username', label: 'Username', type: 'text', placeholder: 'Masukkan username Digiflazz' },
-      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Masukkan API Key' },
+      { key: 'apiKey', label: 'API Key (Development)', type: 'password', placeholder: 'dev-xxxxxxxx-xxxx-xxxx-xxxx', helper: 'Digunakan untuk transaksi & semua operasi API' },
+      { key: 'prodKey', label: 'API Key (Production)', type: 'password', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx', helper: 'Backup key — digunakan jika dev key gagal' },
       { key: 'nomorTujuan', label: 'Nomor Tujuan (Testing)', type: 'text', placeholder: '08xxxxxxxxxx', helper: 'Nomor HP untuk testing transaksi' },
       { key: 'kodeProduk', label: 'Kode Produk (Testing)', type: 'text', placeholder: 'xld10', helper: 'Kode SKU produk untuk testing' },
     ],

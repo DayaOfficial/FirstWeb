@@ -38,10 +38,11 @@ export async function getSettings(keys: string[]): Promise<Record<string, string
  * Source priority: Supabase settings → process.env
  */
 export async function getDigiflazz() {
-  const m = await getSettings(['digiflazz_username', 'digiflazz_api_key']);
+  const m = await getSettings(['digiflazz_username', 'digiflazz_api_key', 'digiflazz_prod_key']);
   return {
     username: m.digiflazz_username || process.env.DIGIFLAZZ_USERNAME || '',
     apiKey: m.digiflazz_api_key || process.env.DIGIFLAZZ_API_KEY || '',
+    prodKey: m.digiflazz_prod_key || process.env.DIGIFLAZZ_PROD_KEY || '',
   };
 }
 

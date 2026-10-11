@@ -94,79 +94,94 @@ export async function processDigiflazz(orderId: string): Promise<{
   // 5. Buat ref_id unik (gunakan order_code agar idempoten)
   const refId = order.order_code || `DM-${orderId.substring(0, 8)}`;
 
-  // 6. Buat signature: md5(username + apiKey + ref_id)
-  const sign = crypto
-    .createHash('md5')
-    .update(cfg.username + cfg.apiKey + refId)
-    .digest('hex');
-
-  // 7. Kirim ke Digiflazz
+  // 6. Kirim ke Digiflazz — coba apiKey dulu, fallback ke prodKey jika signature gagal
   const testing = process.env.DIGIFLAZZ_TESTING === 'true';
+  const keysToTry = [cfg.apiKey, cfg.prodKey].filter(Boolean);
 
   console.log('[processDigiflazz] Mengirim ke Digiflazz:', {
     buyer_sku_code: buyerSkuCode,
     customer_no: customerNo,
     ref_id: refId,
     testing,
+    keys_available: keysToTry.length,
   });
 
-  try {
-    const json = await fetchJson(`${BASE}/transaction`, {
-      username: cfg.username,
-      buyer_sku_code: buyerSkuCode,
-      customer_no: customerNo,
-      ref_id: refId,
-      sign,
-      testing,
-    });
+  let lastError = '';
 
-    const d = json.data;
-    console.log('[processDigiflazz] Response:', JSON.stringify(d));
+  for (const currentKey of keysToTry) {
+    const sign = crypto
+      .createHash('md5')
+      .update(cfg.username + currentKey + refId)
+      .digest('hex');
 
-    // Map Digiflazz status ke internal status
-    const statusRaw = String(d?.status || '').toLowerCase();
-    let processStatus = 'processing'; // default pending/processing
-    if (statusRaw === 'sukses') processStatus = 'success';
-    else if (statusRaw === 'gagal') processStatus = 'failed';
-    else if (statusRaw === 'pending') processStatus = 'processing';
-
-    // Update order
-    await sb.from('orders').update({
-      provider_ref: refId,
-      process_status: processStatus,
-      meta: {
-        ...meta,
+    try {
+      const json = await fetchJson(`${BASE}/transaction`, {
+        username: cfg.username,
         buyer_sku_code: buyerSkuCode,
         customer_no: customerNo,
-        digi_status: d?.status,
-        digi_message: d?.message,
-        digi_rc: d?.rc,
-        digi_sn: d?.sn || null,
-        digi_price: d?.price,
-        digi_last_saldo: d?.buyer_last_saldo,
-        digi_last_check: new Date().toISOString(),
-      },
-    }).eq('id', order.id);
+        ref_id: refId,
+        sign,
+        testing,
+      });
 
-    if (processStatus === 'failed') {
-      return { ok: false, error: d?.message || 'Transaksi gagal', ref_id: refId, status: processStatus };
+      const d = json.data;
+      console.log('[processDigiflazz] Response:', JSON.stringify(d));
+
+      // Jika signature salah, coba key berikutnya
+      if (d?.rc === '41' && keysToTry.length > 1) {
+        console.log('[processDigiflazz] Signature salah, mencoba key lain...');
+        lastError = d?.message || 'Signature salah';
+        continue;
+      }
+
+      // Map Digiflazz status ke internal status
+      const statusRaw = String(d?.status || '').toLowerCase();
+      let processStatus = 'processing';
+      if (statusRaw === 'sukses') processStatus = 'success';
+      else if (statusRaw === 'gagal') processStatus = 'failed';
+      else if (statusRaw === 'pending') processStatus = 'processing';
+
+      // Update order
+      await sb.from('orders').update({
+        provider_ref: refId,
+        process_status: processStatus,
+        meta: {
+          ...meta,
+          buyer_sku_code: buyerSkuCode,
+          customer_no: customerNo,
+          digi_status: d?.status,
+          digi_message: d?.message,
+          digi_rc: d?.rc,
+          digi_sn: d?.sn || null,
+          digi_price: d?.price,
+          digi_last_saldo: d?.buyer_last_saldo,
+          digi_last_check: new Date().toISOString(),
+        },
+      }).eq('id', order.id);
+
+      if (processStatus === 'failed') {
+        return { ok: false, error: d?.message || 'Transaksi gagal', ref_id: refId, status: processStatus };
+      }
+
+      return {
+        ok: true,
+        ref_id: refId,
+        sn: d?.sn || undefined,
+        status: processStatus,
+      };
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err.message : 'Gagal menghubungi Digiflazz';
+      console.error('[processDigiflazz] Error dengan key:', lastError);
+      continue;
     }
-
-    return {
-      ok: true,
-      ref_id: refId,
-      sn: d?.sn || undefined,
-      status: processStatus,
-    };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Gagal menghubungi Digiflazz';
-    console.error('[processDigiflazz] Error:', message);
-
-    await sb.from('orders').update({
-      process_status: 'failed',
-      meta: { ...meta, digi_error: message },
-    }).eq('id', order.id);
-
-    return { ok: false, error: message };
   }
+
+  // Semua key gagal
+  console.error('[processDigiflazz] Semua key gagal:', lastError);
+  await sb.from('orders').update({
+    process_status: 'failed',
+    meta: { ...meta, digi_error: lastError },
+  }).eq('id', order.id);
+
+  return { ok: false, error: lastError };
 }
