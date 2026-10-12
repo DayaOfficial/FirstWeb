@@ -58,11 +58,17 @@ export async function POST(req: Request) {
   else if (statusRaw === 'gagal') processStatus = 'failed';
   else if (statusRaw === 'pending') processStatus = 'processing';
 
-  // Update order jika status berubah
+  // Skip jika error infrastruktur (bukan perubahan status transaksi)
+  if (d.rc === '41' || d.rc === '45') {
+    console.log(`[digiflazz-webhook] Skip rc:${d.rc} for ${d.ref_id}`);
+    return NextResponse.json({ ok: true, skipped: true });
+  }
+
   const meta = (order.meta || {}) as Record<string, any>;
 
   await sb.from('orders').update({
     process_status: processStatus,
+    ...(processStatus === 'success' ? { completed_at: new Date().toISOString() } : {}),
     meta: {
       ...meta,
       digi_status: d.status,

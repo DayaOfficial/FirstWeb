@@ -71,6 +71,14 @@ export async function GET(req: Request) {
       });
 
       const d = json.data;
+
+      // Skip jika error infrastruktur (signature/IP) — BUKAN kegagalan transaksi
+      if (d?.rc === '41' || d?.rc === '45') {
+        console.log(`[check-digi] Order ${refId}: skip (rc:${d.rc} - bukan error transaksi)`);
+        stillPending++;
+        continue;
+      }
+
       const statusRaw = String(d?.status || '').toLowerCase();
       let processStatus = 'processing';
       if (statusRaw === 'sukses') processStatus = 'success';
@@ -79,6 +87,7 @@ export async function GET(req: Request) {
       if (processStatus !== 'processing') {
         await sb.from('orders').update({
           process_status: processStatus,
+          ...(processStatus === 'success' ? { completed_at: new Date().toISOString() } : {}),
           meta: {
             ...meta,
             digi_status: d?.status,
