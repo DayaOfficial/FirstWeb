@@ -16,11 +16,11 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
   const cfg = await getDigiflazz();
-  if (!cfg.username || !cfg.apiKey) {
+  if (!cfg.username || !cfg.readKeys.length) {
     return NextResponse.json({ error: 'Konfigurasi Digiflazz belum ada. Isi di Koneksi & API.' }, { status: 400 });
   }
 
-  const sign = crypto.createHash('md5').update(cfg.username + cfg.apiKey + 'pricelist').digest('hex');
+  const sign = crypto.createHash('md5').update(cfg.username + cfg.readKeys[0] + 'pricelist').digest('hex');
 
   let pre: Record<string, unknown> = {};
   let pas: Record<string, unknown> = {};

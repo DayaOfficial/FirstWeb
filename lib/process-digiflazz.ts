@@ -94,9 +94,9 @@ export async function processDigiflazz(orderId: string): Promise<{
   // 5. Buat ref_id unik (gunakan order_code agar idempoten)
   const refId = order.order_code || `DM-${orderId.substring(0, 8)}`;
 
-  // 6. Kirim ke Digiflazz — coba apiKey dulu, fallback ke prodKey jika signature gagal
+  // 6. Kirim ke Digiflazz — coba dev key (transaksi) dulu, fallback ke prod key
   const testing = process.env.DIGIFLAZZ_TESTING === 'true';
-  const keysToTry = [cfg.apiKey, cfg.prodKey].filter(Boolean);
+  const keysToTry = cfg.transactionKeys;
 
   console.log('[processDigiflazz] Mengirim ke Digiflazz:', {
     buyer_sku_code: buyerSkuCode,

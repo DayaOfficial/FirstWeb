@@ -10,7 +10,7 @@ import { getDigiflazz, fetchJson } from '@/lib/server-config';
 export async function POST() {
   const cfg = await getDigiflazz();
 
-  if (!cfg.username || !cfg.apiKey) {
+  if (!cfg.username || !cfg.readKeys.length) {
     return NextResponse.json({
       ok: false,
       error: 'Konfigurasi Digiflazz belum ada. Simpan username & API key di Koneksi & API.',
@@ -20,7 +20,7 @@ export async function POST() {
   try {
     const sign = crypto
       .createHash('md5')
-      .update(cfg.username + cfg.apiKey + 'depo')
+      .update(cfg.username + cfg.readKeys[0] + 'depo')
       .digest('hex');
 
     const json = await fetchJson('https://api.digiflazz.com/v1/cek-saldo', {

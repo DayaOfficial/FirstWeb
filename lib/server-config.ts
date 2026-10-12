@@ -39,10 +39,18 @@ export async function getSettings(keys: string[]): Promise<Record<string, string
  */
 export async function getDigiflazz() {
   const m = await getSettings(['digiflazz_username', 'digiflazz_api_key', 'digiflazz_prod_key']);
+  const devKey = m.digiflazz_api_key || process.env.DIGIFLAZZ_API_KEY || '';
+  const prodKey = m.digiflazz_prod_key || process.env.DIGIFLAZZ_PROD_KEY || '';
   return {
     username: m.digiflazz_username || process.env.DIGIFLAZZ_USERNAME || '',
-    apiKey: m.digiflazz_api_key || process.env.DIGIFLAZZ_API_KEY || '',
-    prodKey: m.digiflazz_prod_key || process.env.DIGIFLAZZ_PROD_KEY || '',
+    /** Dev key — digunakan untuk TRANSAKSI */
+    apiKey: devKey,
+    /** Prod key — digunakan untuk cek saldo & price list */
+    prodKey: prodKey,
+    /** Key untuk transaksi (dev key utama, prod key fallback) */
+    transactionKeys: [devKey, prodKey].filter(Boolean),
+    /** Key untuk read operations (prod key utama, dev key fallback) */
+    readKeys: [prodKey, devKey].filter(Boolean),
   };
 }
 

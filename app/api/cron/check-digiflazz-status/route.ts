@@ -39,7 +39,7 @@ export async function GET(req: Request) {
   }
 
   const cfg = await getDigiflazz();
-  if (!cfg.username || !cfg.apiKey) {
+  if (!cfg.username || !cfg.transactionKeys.length) {
     return NextResponse.json({ error: 'Digiflazz belum dikonfigurasi' }, { status: 500 });
   }
 
@@ -59,7 +59,7 @@ export async function GET(req: Request) {
       // Digiflazz akan return status terbaru tanpa double-charge
       const sign = crypto
         .createHash('md5')
-        .update(cfg.username + cfg.apiKey + refId)
+        .update(cfg.username + cfg.transactionKeys[0] + refId)
         .digest('hex');
 
       const json = await fetchJson('https://api.digiflazz.com/v1/transaction', {
