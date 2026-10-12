@@ -30,8 +30,8 @@ export async function GET() {
   }
 
   // Test 2: Cek saldo via proxy
-  if (proxyUrl && cfg.username && cfg.apiKey) {
-    const sign = crypto.createHash('md5').update(cfg.username + cfg.apiKey + 'depo').digest('hex');
+  if (proxyUrl && cfg.username && cfg.readKeys.length) {
+    const sign = crypto.createHash('md5').update(cfg.username + cfg.readKeys[0] + 'depo').digest('hex');
     try {
       const r = await fetch(`${proxyUrl}/proxy`, {
         method: 'POST',
@@ -50,8 +50,8 @@ export async function GET() {
   }
 
   // Test 3: Cek saldo DIRECT (tanpa proxy)
-  if (cfg.username && cfg.apiKey) {
-    const sign = crypto.createHash('md5').update(cfg.username + cfg.apiKey + 'depo').digest('hex');
+  if (cfg.username && cfg.readKeys.length) {
+    const sign = crypto.createHash('md5').update(cfg.username + cfg.readKeys[0] + 'depo').digest('hex');
     try {
       const r = await fetch('https://api.digiflazz.com/v1/cek-saldo', {
         method: 'POST',

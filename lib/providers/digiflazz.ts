@@ -10,13 +10,13 @@ const BASE = 'https://api.digiflazz.com/v1';
  */
 export async function fetchPriceList(cmd: 'prepaid' | 'pasca' = 'prepaid'): Promise<DigiflazzProduct[]> {
   const cfg = await getDigiflazz();
-  if (!cfg.username || !cfg.apiKey) {
+  if (!cfg.username || !cfg.readKeys.length) {
     throw new Error('Konfigurasi Digiflazz belum ada. Simpan di halaman Koneksi & API.');
   }
 
   const sign = crypto
     .createHash('md5')
-    .update(cfg.username + cfg.apiKey + 'pricelist')
+    .update(cfg.username + cfg.readKeys[0] + 'pricelist')
     .digest('hex');
 
   const json = await fetchJson(`${BASE}/price-list`, {

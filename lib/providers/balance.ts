@@ -9,7 +9,7 @@ import { sprintBalance } from '@/lib/sprintpedia';
 export async function getDigiflazzBalance() {
   const cfg = await getDigiflazz();
 
-  if (!cfg.username || !cfg.apiKey) {
+  if (!cfg.username || !cfg.readKeys.length) {
     return {
       provider: 'digiflazz' as const,
       balance: 0,
@@ -20,7 +20,7 @@ export async function getDigiflazzBalance() {
 
   const sign = crypto
     .createHash('md5')
-    .update(cfg.username + cfg.apiKey + 'depo')
+    .update(cfg.username + cfg.readKeys[0] + 'depo')
     .digest('hex');
 
   try {
