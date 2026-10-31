@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-sprintpedia",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-digiflazz",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/check-digiflazz-status",
+      "schedule": "0 21 * * *"
+    }
+  ]
+}

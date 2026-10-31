@@ -1,0 +1,82 @@
+import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { NextResponse } from 'next/server';
+
+export async function POST(req: Request) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    }
+
+    // Cek owner role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    const role = profile?.role || user.user_metadata?.role;
+    if (role !== 'owner') {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+
+    const { userId, action } = await req.json();
+
+    if (!userId || !['approved', 'rejected', 'blocked', 'unblocked'].includes(action)) {
+      return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+    }
+
+    const serviceSupabase = createServiceClient();
+
+    // Map action ke status
+    const statusMap: Record<string, string> = {
+      approved: 'approved',
+      rejected: 'rejected',
+      blocked: 'blocked',
+      unblocked: 'approved', // unblock = kembali ke approved
+    };
+    const newStatus = statusMap[action];
+    const updateData: Record<string, unknown> = { status: newStatus };
+    if (action === 'approved' || action === 'unblocked') {
+      updateData.approved_at = new Date().toISOString();
+    }
+    const { error: updateError } = await serviceSupabase
+      .from('profiles')
+      .update(updateData)
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('[user-action] update profile error:', updateError.message);
+      return NextResponse.json({ error: 'Gagal mengupdate status user.' }, { status: 500 });
+    }
+
+    // Sync status ke user metadata (agar middleware bisa baca dari JWT tanpa query profiles)
+    const { error: metaError } = await serviceSupabase.auth.admin.updateUserById(userId, {
+      user_metadata: { status: newStatus },
+    });
+
+    if (metaError) {
+      console.error('[user-action] update user metadata error:', metaError.message);
+      // Tidak fatal — profile sudah diupdate, metadata hanya pelengkap
+    }
+
+    // Hapus notifikasi terkait user ini setelah action berhasil
+    const { error: deleteNotifError } = await serviceSupabase
+      .from('notifications')
+      .delete()
+      .eq('user_id', userId)
+      .eq('type', 'registration');
+
+    if (deleteNotifError) {
+      console.error('[user-action] delete notification error:', deleteNotifError.message);
+      // Tidak fatal — lanjutkan saja
+    }
+
+    return NextResponse.json({ success: true, status: newStatus });
+  } catch (err) {
+    console.error('[user-action] unexpected error:', err);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+}
