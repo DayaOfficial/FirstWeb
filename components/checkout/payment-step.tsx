@@ -34,17 +34,59 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
   const [simulating, setSimulating] = useState(false);
 
   // QR string → gambar data URL
+  // Beberapa page tidak meneruskan qrString dari /api/orders/create.
+  // Jika kosong, ambil langsung dari server via /api/orders/resume.
+  const [fetchedQr, setFetchedQr] = useState<string | null>(null);
+  const [fetchedTotal, setFetchedTotal] = useState<number | null>(null);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+
+  // qrisUrl lama kadang berisi QR string mentah, bukan URL gambar
+  const qrisUrlIsImage = !!qrisUrl && /^(https?:|data:image)/.test(qrisUrl);
+  const effectiveQrString = qrString || (!qrisUrlIsImage ? qrisUrl : null) || fetchedQr;
+
+  useEffect(() => {
+    if (!orderId || testMode || qrString || qrisUrl) return;
+    let cancelled = false;
+    let attempts = 0;
+    setQrLoading(true);
+
+    const load = async () => {
+      attempts++;
+      try {
+        const res = await fetch(`/api/orders/resume?orderId=${orderId}`);
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (data.qrString) {
+          setFetchedQr(data.qrString);
+          if (data.totalPayment) setFetchedTotal(Number(data.totalPayment));
+          setQrLoading(false);
+          return;
+        }
+        if (data.pakasirError) {
+          setQrError(data.pakasirError);
+          setQrLoading(false);
+          return;
+        }
+      } catch { /* retry */ }
+      if (!cancelled && attempts < 3) setTimeout(load, 2000);
+      else if (!cancelled) setQrLoading(false);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [orderId, testMode, qrString, qrisUrl]);
+
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   useEffect(() => {
-    if (qrString) {
-      QRCode.toDataURL(qrString, { width: 280, margin: 2 })
+    if (effectiveQrString) {
+      QRCode.toDataURL(effectiveQrString, { width: 280, margin: 2 })
         .then(url => setQrDataUrl(url))
         .catch(err => console.error('[QR] render error:', err));
     }
-  }, [qrString]);
+  }, [effectiveQrString]);
 
   // Nominal yang ditampilkan: totalPayment dari Pakasir (termasuk fee), atau amount
-  const displayAmount = totalPayment || amount;
+  const displayAmount = totalPayment || fetchedTotal || amount;
 
   // Timer countdown
   useEffect(() => {
@@ -175,13 +217,13 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
 
   // Download QR handler
   const handleDownloadQR = useCallback(() => {
-    const src = qrDataUrl || qrisUrl;
+    const src = qrDataUrl || (qrisUrlIsImage ? qrisUrl : null);
     if (!src) return;
     const a = document.createElement('a');
     a.href = src;
     a.download = `QRIS-${orderId || 'payment'}.png`;
     a.click();
-  }, [qrDataUrl, qrisUrl, orderId]);
+  }, [qrDataUrl, qrisUrl, qrisUrlIsImage, orderId]);
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
@@ -234,7 +276,7 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
     );
   }
 
-  const hasQr = !!qrDataUrl || !!qrisUrl;
+  const hasQr = !!qrDataUrl || qrisUrlIsImage;
 
   return (
     <div className="max-w-lg mx-auto space-y-6 animate-fade-in">
@@ -275,8 +317,8 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
           {/* Prioritas: QR dari string (dirender jadi gambar) → qrisUrl (gambar langsung) → placeholder */}
           {qrDataUrl ? (
             <img src={qrDataUrl} alt="QRIS" className="w-64 h-64 object-contain" />
-          ) : qrisUrl ? (
-            <img src={qrisUrl} alt="QRIS" className="w-64 h-64 object-contain" />
+          ) : qrisUrlIsImage ? (
+            <img src={qrisUrl!} alt="QRIS" className="w-64 h-64 object-contain" />
           ) : testMode ? (
             <div className="w-64 h-64 bg-surface-container-high rounded flex items-center justify-center">
               <div className="text-center">
@@ -285,11 +327,21 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
                 <p className="text-[11px] text-on-surface-variant">Klik &quot;Simulasi Bayar&quot; di bawah</p>
               </div>
             </div>
-          ) : (
+          ) : qrLoading || (!orderId && !qrError) ? (
             <div className="w-64 h-64 bg-surface-container-high rounded flex items-center justify-center">
               <div className="text-center">
-                <QrCode size={80} className="text-primary/30 mx-auto mb-2" />
-                <p className="text-xs text-on-surface-variant">QR Code belum tersedia.<br />Konfigurasi Pakasir di panel.</p>
+                <Loader2 size={40} className="text-primary animate-spin mx-auto mb-2" />
+                <p className="text-xs text-on-surface-variant">Membuat QR Code...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="w-64 h-64 bg-surface-container-high rounded flex items-center justify-center p-3">
+              <div className="text-center">
+                <QrCode size={64} className="text-primary/30 mx-auto mb-2" />
+                <p className="text-xs text-on-surface-variant font-semibold">QR Code gagal dibuat.</p>
+                {qrError && (
+                  <p className="text-[11px] text-error mt-1 break-words">{qrError}</p>
+                )}
               </div>
             </div>
           )}

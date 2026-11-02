@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { getSettings, getPakasir } from '@/lib/server-config';
 import { NextResponse } from 'next/server';
 import { generateOrderCode } from '@/lib/utils';
+import { createPakasirQris } from '@/lib/pakasir';
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -126,60 +127,47 @@ export async function POST(req: Request) {
 
   let qrString: string | null = null;
   let pakasirExpiresAt: string | null = null;
+  let totalPayment: number | null = null;
+  let pakasirError: string | null = null;
 
   if (!testMode) {
     try {
       const pk = await getPakasir();
-      if (pk.slug && pk.apiKey) {
-        const url = 'https://app.pakasir.com/api/transactioncreate/qris';
-        const pakasirBody = {
-          project: pk.slug,
-          order_id: orderCode,
-          amount: Number(amount),
-          api_key: pk.apiKey,
-        };
+      console.log('[Pakasir] Creating QRIS:', { project: pk.slug, order_id: orderCode, amount: Number(amount) });
 
-        console.log('[Pakasir] Creating QRIS:', { project: pk.slug, order_id: orderCode, amount: Number(amount) });
+      const r = await createPakasirQris(pk, orderCode, Number(amount));
 
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(pakasirBody),
-        });
+      if (r.ok && r.qrString) {
+        qrString = r.qrString;
+        pakasirExpiresAt = r.expiredAt;
+        totalPayment = r.totalPayment;
 
-        const text = await res.text();
-        let json: any;
-        try {
-          json = JSON.parse(text);
-        } catch {
-          console.error('[Pakasir] Response bukan JSON:', text.substring(0, 200));
-          json = {};
-        }
+        // Simpan QR string + referensi ke order agar bisa di-resume
+        await serviceSupabase.from('orders').update({
+          payment_ref: r.txnId || orderCode,
+          qris_url: qrString,
+          ...(pakasirExpiresAt ? { expires_at: pakasirExpiresAt } : {}),
+          meta: {
+            ...meta,
+            pakasir_version: r.version,
+            pakasir_txn_id: r.txnId,
+            pakasir_fee: r.fee,
+            pakasir_total: r.totalPayment,
+            pakasir_sandbox: r.isSandbox,
+          },
+        }).eq('id', order.id);
 
-        console.log('[Pakasir] Response:', JSON.stringify(json).substring(0, 500));
-
-        // Pakasir mengembalikan: { payment: { payment_number: "QR_STRING", expired_at: "...", ... } }
-        const payment = json?.payment;
-        if (payment?.payment_number) {
-          qrString = payment.payment_number;
-          pakasirExpiresAt = payment.expired_at || null;
-
-          // Simpan QR string + referensi ke order agar bisa di-resume
-          await serviceSupabase.from('orders').update({
-            payment_ref: orderCode,
-            qris_url: qrString,
-            ...(pakasirExpiresAt ? { expires_at: pakasirExpiresAt } : {}),
-          }).eq('id', order.id);
-
-          console.log('[Pakasir] ✅ QR String diterima, panjang:', qrString!.length);
-        } else {
-          console.error('[Pakasir] payment_number tidak ditemukan dalam response:', JSON.stringify(json));
-        }
+        console.log(`[Pakasir] ✅ QR diterima via ${r.version}, panjang:`, qrString.length);
       } else {
-        console.error('[Pakasir] slug atau apiKey belum dikonfigurasi');
+        pakasirError = r.error || 'QR tidak diterima dari Pakasir';
+        console.error('[Pakasir] Gagal:', pakasirError);
+        await serviceSupabase.from('orders').update({
+          meta: { ...meta, pakasir_error: pakasirError },
+        }).eq('id', order.id);
       }
     } catch (err: any) {
-      console.error('[Pakasir] Error:', err?.message || err);
+      pakasirError = err?.message || String(err);
+      console.error('[Pakasir] Error:', pakasirError);
       // Lanjut tanpa QR — tidak gagalkan order
     }
   }
@@ -190,6 +178,8 @@ export async function POST(req: Request) {
     qrString,
     testMode,
     amount: Number(amount),
+    totalPayment,
+    pakasirError,
     expiresAt: pakasirExpiresAt || expiresAt.toISOString(),
   });
 }

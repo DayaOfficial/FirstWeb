@@ -19,14 +19,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { order_id, amount, status: payStatus, completed_at } = body;
+  // Pakasir v1 kirim body flat; v2 bisa membungkus dalam `data`
+  const payload = body?.data && typeof body.data === 'object' ? body.data : body;
+  const { order_id, amount, status: payStatus, completed_at } = payload;
 
   if (!order_id || !amount) {
     return NextResponse.json({ error: 'order_id dan amount wajib' }, { status: 400 });
   }
 
-  // Hanya proses jika status completed
-  if (payStatus !== 'completed') {
+  // Hanya proses jika status lunas
+  const PAID_STATUSES = ['completed', 'paid', 'success', 'settlement'];
+  if (!PAID_STATUSES.includes(String(payStatus || '').toLowerCase())) {
     return NextResponse.json({ ok: true, message: `Status '${payStatus}' diterima tapi tidak diproses` });
   }
 

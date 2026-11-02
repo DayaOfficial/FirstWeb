@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { getPakasir, getSettings } from '@/lib/server-config';
+import { createPakasirQris } from '@/lib/pakasir';
 import { NextResponse } from 'next/server';
 
 /**
@@ -33,45 +34,16 @@ export async function GET() {
   result.envPakasirSlug = process.env.PAKASIR_SLUG ? 'SET' : 'NOT SET';
   result.envPakasirApiKey = process.env.PAKASIR_API_KEY ? 'SET' : 'NOT SET';
 
-  // 4. Test call ke Pakasir dengan amount kecil (Rp 1) — akan error tapi bisa lihat response format
+  // 4. Test create QRIS (v2 → v1 fallback), amount Rp 1000
   if (pk.slug && pk.apiKey) {
-    try {
-      const testBody = {
-        project: pk.slug,
-        order_id: `TEST-${Date.now()}`,
-        amount: 1,
-        api_key: pk.apiKey,
-      };
-
-      const res = await fetch('https://app.pakasir.com/api/transactioncreate/qris', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(testBody),
-      });
-
-      const text = await res.text();
-      result.httpStatus = res.status;
-      result.responseHeaders = Object.fromEntries(res.headers.entries());
-
-      try {
-        result.responseJson = JSON.parse(text);
-      } catch {
-        result.responseRaw = text.substring(0, 500);
-        result.responseIsJson = false;
-      }
-
-      // Cek apakah ada payment_number
-      const json = result.responseJson;
-      if (json?.payment?.payment_number) {
-        result.qrStringReceived = true;
-        result.qrStringLength = json.payment.payment_number.length;
-      } else {
-        result.qrStringReceived = false;
-        result.hint = 'payment.payment_number tidak ada dalam response. Cek format API Pakasir.';
-      }
-    } catch (err: any) {
-      result.fetchError = err?.message || String(err);
-    }
+    const r = await createPakasirQris(pk, `TEST-${Date.now()}`, 1000);
+    result.qrStringReceived = r.ok;
+    result.apiVersion = r.version;
+    result.txnId = r.txnId;
+    result.isSandbox = r.isSandbox;
+    result.qrStringLength = r.qrString?.length ?? 0;
+    result.error = r.error ?? null;
+    result.raw = r.raw ?? null;
   } else {
     result.skippedTest = true;
     result.hint = 'Slug atau API key kosong. Set di Panel Owner → API atau Pengaturan.';

@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { getPakasir } from '@/lib/server-config';
+import { checkPakasirPaid } from '@/lib/pakasir';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
   // Ambil order
   const { data: order, error: orderErr } = await sb
     .from('orders')
-    .select('id, order_code, amount, payment_status, user_id')
+    .select('id, order_code, amount, payment_status, user_id, meta')
     .eq('id', orderId)
     .single();
 
@@ -43,23 +44,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ paid: true, payment_status: 'paid' });
   }
 
-  // Coba verifikasi via Pakasir Transaction Detail API
+  // Coba verifikasi via Pakasir (v2 jika ada txn_id, fallback v1)
   try {
     const pk = await getPakasir();
     if (pk.slug && pk.apiKey) {
-      const params = new URLSearchParams({
-        project: pk.slug,
-        amount: String(order.amount),
-        order_id: order.order_code,
-        api_key: pk.apiKey,
+      const meta = (order.meta || {}) as Record<string, any>;
+      const r = await checkPakasirPaid(pk, {
+        txnId: meta.pakasir_txn_id || null,
+        orderId: order.order_code,
+        amount: Number(order.amount),
       });
-      const url = `https://app.pakasir.com/api/transactiondetail?${params}`;
-      const res = await fetch(url);
-      const json = await res.json().catch(() => ({}));
 
-      const txStatus = json?.transaction?.status || json?.status;
-
-      if (txStatus === 'completed') {
+      if (r.paid) {
         // Tandai lunas di DB
         await sb.from('orders').update({
           payment_status: 'paid',

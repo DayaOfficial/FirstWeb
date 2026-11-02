@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
   const sb = createServiceClient();
   const { data: order, error } = await sb
     .from('orders')
-    .select('id, order_code, product_name, amount, payment_status, qris_url, expires_at, created_at, user_id')
+    .select('id, order_code, product_name, amount, payment_status, qris_url, expires_at, created_at, user_id, meta')
     .eq('id', orderId)
     .single();
 
@@ -49,12 +49,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Order sudah kedaluwarsa' }, { status: 410 });
   }
 
+  const meta = (order.meta || {}) as Record<string, any>;
+
   return NextResponse.json({
     orderId: order.id,
     orderCode: order.order_code,
     productName: order.product_name,
     amount: Number(order.amount),
     qrString: order.qris_url || null,
+    totalPayment: meta.pakasir_total ?? null,
+    pakasirError: meta.pakasir_error ?? null,
     expiresAt: expiresAt.toISOString(),
   });
 }
