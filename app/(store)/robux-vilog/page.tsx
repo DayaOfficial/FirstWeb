@@ -175,7 +175,7 @@ export default function RobuxVilogPage() {
                 setStep('confirm');
                 return;
               }
-              go({ orderId: data.orderId, qrisUrl: data.qrisUrl || null, qrString: data.qrString || null, testMode: data.testMode || false });
+              go({ orderId: data.orderId, qrisUrl: data.qrisUrl || null, qrString: data.qrString || null, qrImage: data.qrImage || null, testMode: data.testMode || false });
             } catch {
               alert('Gagal: Kesalahan jaringan');
               setStep('confirm');

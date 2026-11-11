@@ -85,13 +85,28 @@ export async function createPakasirQris(
     const qr = d?.qr_string || d?.payment_number || d?.payment?.payment_number;
 
     if (res.ok && qr) {
+      // QRIS asli selalu diawali "000201" (format EMVCo).
+      // Project sandbox mengembalikan placeholder yang tidak bisa di-scan.
+      if (!String(qr).startsWith('000201')) {
+        return {
+          ...empty,
+          txnId: d?.txn_id ?? null,
+          isSandbox: !!d?.is_sandbox,
+          version: 'v2',
+          raw: json,
+          error: d?.is_sandbox
+            ? 'Project Pakasir masih mode SANDBOX — QR placeholder tidak bisa di-scan. Aktifkan mode Production di dashboard Pakasir.'
+            : `QR string dari Pakasir tidak valid: ${String(qr).substring(0, 60)}`,
+        };
+      }
+
       return {
         ok: true,
         qrString: qr,
         txnId: d?.txn_id ?? null,
         totalPayment: d?.total_payment ?? null,
         fee: d?.fee ?? null,
-        expiredAt: d?.expired_at ?? null,
+        expiredAt: d?.expires_at ?? d?.expired_at ?? null,
         isSandbox: !!d?.is_sandbox,
         version: 'v2',
         raw: json,

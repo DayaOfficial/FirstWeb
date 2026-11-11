@@ -10,6 +10,7 @@ interface PaymentStepProps {
   orderId: string | null;
   qrisUrl: string | null;
   qrString?: string | null;
+  qrImage?: string | null;
   testMode?: boolean;
   amount: number;
   totalPayment?: number;
@@ -17,7 +18,7 @@ interface PaymentStepProps {
   expiresAt?: string | null;
 }
 
-export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amount, totalPayment, productName, expiresAt }: PaymentStepProps) {
+export default function PaymentStep({ orderId, qrisUrl, qrString, qrImage, testMode, amount, totalPayment, productName, expiresAt }: PaymentStepProps) {
   const EXPIRE_SECONDS = 10 * 60; // 10 menit default
   const [timeLeft, setTimeLeft] = useState(() => {
     if (expiresAt) {
@@ -37,11 +38,14 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
   // Beberapa page tidak meneruskan qrString dari /api/orders/create.
   // Jika kosong, ambil langsung dari server via /api/orders/resume.
   const [fetchedQr, setFetchedQr] = useState<string | null>(null);
+  const [fetchedQrImage, setFetchedQrImage] = useState<string | null>(null);
   const [fetchedTotal, setFetchedTotal] = useState<number | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
 
   // qrisUrl lama kadang berisi QR string mentah, bukan URL gambar
+  // qrImage dari NPay adalah data URI PNG — bisa langsung pakai
+  const effectiveQrImage = qrImage || fetchedQrImage || null;
   const qrisUrlIsImage = !!qrisUrl && /^(https?:|data:image)/.test(qrisUrl);
   const effectiveQrString = qrString || (!qrisUrlIsImage ? qrisUrl : null) || fetchedQr;
 
@@ -57,14 +61,15 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
         const res = await fetch(`/api/orders/resume?orderId=${orderId}`);
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
-        if (data.qrString) {
-          setFetchedQr(data.qrString);
+        if (data.qrString || data.qrImage) {
+          if (data.qrString) setFetchedQr(data.qrString);
+          if (data.qrImage) setFetchedQrImage(data.qrImage);
           if (data.totalPayment) setFetchedTotal(Number(data.totalPayment));
           setQrLoading(false);
           return;
         }
-        if (data.pakasirError) {
-          setQrError(data.pakasirError);
+        if (data.npayError) {
+          setQrError(data.npayError);
           setQrLoading(false);
           return;
         }
@@ -217,7 +222,7 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
 
   // Download QR handler
   const handleDownloadQR = useCallback(() => {
-    const src = qrDataUrl || (qrisUrlIsImage ? qrisUrl : null);
+    const src = qrDataUrl || effectiveQrImage || (qrisUrlIsImage ? qrisUrl : null);
     if (!src) return;
     const a = document.createElement('a');
     a.href = src;
@@ -276,7 +281,7 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
     );
   }
 
-  const hasQr = !!qrDataUrl || qrisUrlIsImage;
+  const hasQr = !!qrDataUrl || !!effectiveQrImage || qrisUrlIsImage;
 
   return (
     <div className="max-w-lg mx-auto space-y-6 animate-fade-in">
@@ -298,7 +303,7 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
           <FlaskConical size={20} className="text-amber-600 shrink-0" />
           <div>
             <p className="text-sm font-semibold text-amber-800">Mode Uji Aktif</p>
-            <p className="text-xs text-amber-700">Pembayaran tidak memanggil Pakasir. Gunakan tombol simulasi di bawah.</p>
+            <p className="text-xs text-amber-700">Pembayaran tidak memanggil NPay. Gunakan tombol simulasi di bawah.</p>
           </div>
         </div>
       )}
@@ -314,9 +319,11 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, testMode, amou
         </div>
 
         <div className="bg-white p-4 rounded-lg border-2 border-primary-container/20 shadow-inner mb-6">
-          {/* Prioritas: QR dari string (dirender jadi gambar) → qrisUrl (gambar langsung) → placeholder */}
+          {/* Prioritas: QR dari string (dirender jadi gambar) → qrImage NPay (data URI) → qrisUrl (gambar langsung) → placeholder */}
           {qrDataUrl ? (
             <img src={qrDataUrl} alt="QRIS" className="w-64 h-64 object-contain" />
+          ) : effectiveQrImage ? (
+            <img src={effectiveQrImage} alt="QRIS" className="w-64 h-64 object-contain" />
           ) : qrisUrlIsImage ? (
             <img src={qrisUrl!} alt="QRIS" className="w-64 h-64 object-contain" />
           ) : testMode ? (

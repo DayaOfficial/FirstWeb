@@ -18,6 +18,7 @@ export default function ResumePembayaranPage() {
     productName: string;
     amount: number;
     qrString: string | null;
+    qrImage: string | null;
     expiresAt: string;
   } | null>(null);
 
@@ -100,6 +101,7 @@ export default function ResumePembayaranPage() {
         orderId={orderData.orderId}
         qrisUrl={null}
         qrString={orderData.qrString}
+        qrImage={orderData.qrImage}
         testMode={false}
         amount={orderData.amount}
         productName={orderData.productName}

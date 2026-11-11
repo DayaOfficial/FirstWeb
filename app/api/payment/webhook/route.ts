@@ -1,56 +1,104 @@
 import { createServiceClient } from '@/lib/supabase/server';
+import { getNPay } from '@/lib/server-config';
+import { verifyNPaySignature } from '@/lib/npay';
 import { processSmm } from '@/lib/process-smm';
 import { NextResponse } from 'next/server';
 
 /**
  * POST /api/payment/webhook
  *
- * Endpoint webhook untuk menerima callback dari Pakasir
- * saat pembayaran QRIS berhasil (status: 'completed').
+ * Endpoint webhook untuk menerima callback dari NPay
+ * saat pembayaran QRIS berhasil.
  *
- * Body dari Pakasir:
- * { amount, order_id, project, status, payment_method, completed_at }
+ * NPay payload:
+ * { event: "transaction.paid", id, amount, status, source, sumber_order, created_at, paid_at }
+ *
+ * Header: X-NPay-Signature = HMAC-SHA256(body, webhook_secret)
  */
 export async function POST(req: Request) {
-  let body: any;
+  // Baca raw body dulu untuk verifikasi signature
+  let rawBody: string;
   try {
-    body = await req.json();
+    rawBody = await req.text();
+  } catch {
+    return NextResponse.json({ error: 'Gagal membaca body' }, { status: 400 });
+  }
+
+  let payload: any;
+  try {
+    payload = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // Pakasir v1 kirim body flat; v2 bisa membungkus dalam `data`
-  const payload = body?.data && typeof body.data === 'object' ? body.data : body;
-  const { order_id, amount, status: payStatus, completed_at } = payload;
+  // Verifikasi HMAC signature
+  const signature = req.headers.get('x-npay-signature') || '';
+  const npay = await getNPay();
 
-  if (!order_id || !amount) {
-    return NextResponse.json({ error: 'order_id dan amount wajib' }, { status: 400 });
+  if (npay.webhookSecret && signature) {
+    if (!verifyNPaySignature(rawBody, signature, npay.webhookSecret)) {
+      console.error('[webhook] Signature NPay tidak valid');
+      return NextResponse.json({ error: 'Signature tidak valid' }, { status: 401 });
+    }
   }
 
-  // Hanya proses jika status lunas
-  const PAID_STATUSES = ['completed', 'paid', 'success', 'settlement'];
-  if (!PAID_STATUSES.includes(String(payStatus || '').toLowerCase())) {
+  const { event, id: txnId, amount, status: payStatus, paid_at, sumber_order } = payload;
+
+  // Hanya proses event transaction.paid
+  if (event && event !== 'transaction.paid') {
+    return NextResponse.json({ ok: true, message: `Event '${event}' diterima tapi tidak diproses` });
+  }
+
+  // Fallback: cek status field jika event tidak ada
+  if (!event && payStatus !== 'paid') {
     return NextResponse.json({ ok: true, message: `Status '${payStatus}' diterima tapi tidak diproses` });
+  }
+
+  if (!txnId) {
+    return NextResponse.json({ error: 'Transaction ID (id) wajib' }, { status: 400 });
   }
 
   const sb = createServiceClient();
 
-  // Cari order berdasarkan order_code
-  const { data: order, error: findErr } = await sb
+  // Cari order berdasarkan payment_ref (NPay txn_id) atau meta.npay_txn_id
+  let order: any = null;
+
+  // Coba cari via payment_ref dulu
+  const { data: byRef } = await sb
     .from('orders')
     .select('id, order_code, amount, payment_status, module')
-    .eq('order_code', order_id)
+    .eq('payment_ref', txnId)
     .single();
 
-  if (findErr || !order) {
-    console.error('[webhook] Order tidak ditemukan:', order_id);
-    return NextResponse.json({ error: 'Order tidak ditemukan' }, { status: 404 });
+  if (byRef) {
+    order = byRef;
+  } else {
+    // Fallback: cari di meta jsonb
+    const { data: byMeta } = await sb
+      .from('orders')
+      .select('id, order_code, amount, payment_status, module')
+      .contains('meta', { npay_txn_id: txnId })
+      .single();
+
+    order = byMeta;
   }
 
-  // Validasi amount cocok (toleransi ±1 untuk pembulatan)
-  if (Math.abs(Number(order.amount) - Number(amount)) > 1) {
-    console.error('[webhook] Amount mismatch:', { expected: order.amount, received: amount });
-    return NextResponse.json({ error: 'Amount tidak cocok' }, { status: 400 });
+  if (!order) {
+    // Coba juga via sumber_order (format: dayamart-ORDER_CODE)
+    if (sumber_order) {
+      const orderCode = sumber_order.replace(/^dayamart-/, '');
+      const { data: bySumber } = await sb
+        .from('orders')
+        .select('id, order_code, amount, payment_status, module')
+        .eq('order_code', orderCode)
+        .single();
+      order = bySumber;
+    }
+  }
+
+  if (!order) {
+    console.error('[webhook] Order tidak ditemukan untuk txn:', txnId);
+    return NextResponse.json({ error: 'Order tidak ditemukan' }, { status: 404 });
   }
 
   // Sudah dibayar? Skip
@@ -63,7 +111,7 @@ export async function POST(req: Request) {
     .from('orders')
     .update({
       payment_status: 'paid',
-      paid_at: completed_at || new Date().toISOString(),
+      paid_at: paid_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .eq('id', order.id);

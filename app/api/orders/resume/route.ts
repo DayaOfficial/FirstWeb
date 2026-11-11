@@ -57,8 +57,9 @@ export async function GET(req: NextRequest) {
     productName: order.product_name,
     amount: Number(order.amount),
     qrString: order.qris_url || null,
-    totalPayment: meta.pakasir_total ?? null,
-    pakasirError: meta.pakasir_error ?? null,
+    qrImage: meta.npay_qr_image ?? null,
+    totalPayment: meta.npay_total ?? null,
+    npayError: meta.npay_error ?? null,
     expiresAt: expiresAt.toISOString(),
   });
 }

@@ -68,14 +68,15 @@ export async function getSprint() {
 }
 
 /**
- * Get Pakasir (QRIS) credentials.
+ * Get NPay (QRIS) credentials.
  * Source priority: Supabase settings → process.env
  */
-export async function getPakasir() {
-  const m = await getSettings(['pakasir_merchant_code', 'pakasir_api_key']);
+export async function getNPay() {
+  const m = await getSettings(['npay_license_key', 'npay_webhook_secret', 'npay_qris_id']);
   return {
-    slug: m.pakasir_merchant_code || process.env.PAKASIR_SLUG || '',
-    apiKey: m.pakasir_api_key || process.env.PAKASIR_API_KEY || '',
+    licenseKey: m.npay_license_key || process.env.NPAY_LICENSE_KEY || '',
+    webhookSecret: m.npay_webhook_secret || process.env.NPAY_WEBHOOK_SECRET || '',
+    qrisId: m.npay_qris_id || process.env.NPAY_QRIS_ID || '',
   };
 }
 

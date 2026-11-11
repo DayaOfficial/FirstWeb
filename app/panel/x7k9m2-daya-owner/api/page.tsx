@@ -59,19 +59,21 @@ const PROVIDERS: ProviderDef[] = [
     ],
   },
   {
-    id: 'pakasir',
-    name: 'Pakasir (QRIS)',
+    id: 'npay',
+    name: 'NPay (QRIS)',
     desc: 'Payment Gateway',
-    badge: 'PK',
+    badge: 'NP',
     bgColor: 'bg-amber-100',
     textColor: 'text-amber-600',
     settingsMap: {
-      slug: 'pakasir_merchant_code',
-      apiKey: 'pakasir_api_key',
+      licenseKey: 'npay_license_key',
+      webhookSecret: 'npay_webhook_secret',
+      qrisId: 'npay_qris_id',
     },
     fields: [
-      { key: 'slug', label: 'Slug', type: 'text', placeholder: 'Masukkan slug merchant Pakasir' },
-      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Masukkan API Key Pakasir' },
+      { key: 'licenseKey', label: 'License Key', type: 'password', placeholder: 'lic_xxxxxxxxxxxx', helper: 'Dari menu Akun Saya → Keamanan Akun di NPay' },
+      { key: 'webhookSecret', label: 'Webhook Secret', type: 'password', placeholder: 'whs_xxxxxxxxxxxxxxxx', helper: 'Dari menu Akun Saya → Keamanan Akun di NPay' },
+      { key: 'qrisId', label: 'QRIS ID', type: 'text', placeholder: 'ID QRIS dari menu Daftar QRIS', helper: 'Ambil dari API /api/app/qris atau dashboard NPay' },
     ],
   },
 ];
@@ -89,7 +91,7 @@ export default function OwnerApiPage() {
   const [configs, setConfigs] = useState<Record<string, ProviderConfig>>({
     digiflazz: { username: '', apiKey: '', nomorTujuan: '', kodeProduk: '' },
     sprintpedia: { apiKey: '', secretKey: '' },
-    pakasir: { slug: '', apiKey: '' },
+    npay: { licenseKey: '', webhookSecret: '', qrisId: '' },
   });
 
   // Test Digiflazz connection
@@ -124,6 +126,24 @@ export default function OwnerApiPage() {
       }
     } catch {
       setTestResult({ provider: 'sprintpedia', msg: '❌ Kesalahan jaringan', ok: false });
+    }
+    setTesting(null);
+  };
+
+  // Test NPay connection
+  const handleTestNPay = async () => {
+    setTesting('npay');
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/debug/npay');
+      const data = await res.json();
+      if (data.testCreate?.ok) {
+        setTestResult({ provider: 'npay', msg: `✅ Terhubung! Test QRIS berhasil (txn: ${data.testCreate.txnId})`, ok: true });
+      } else {
+        setTestResult({ provider: 'npay', msg: `❌ ${data.testCreate?.error || data.error || 'Gagal koneksi'}`, ok: false });
+      }
+    } catch {
+      setTestResult({ provider: 'npay', msg: '❌ Kesalahan jaringan', ok: false });
     }
     setTesting(null);
   };
@@ -377,6 +397,16 @@ export default function OwnerApiPage() {
                           className="px-4 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-semibold hover:bg-emerald-100 transition-all flex items-center gap-1.5 disabled:opacity-50"
                         >
                           {testing === 'sprintpedia' ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                          Uji
+                        </button>
+                      )}
+                      {p.id === 'npay' && connected && (
+                        <button
+                          onClick={handleTestNPay}
+                          disabled={testing === 'npay'}
+                          className="px-4 py-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-sm font-semibold hover:bg-amber-100 transition-all flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          {testing === 'npay' ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
                           Uji
                         </button>
                       )}

@@ -267,6 +267,7 @@ export default function ProductCheckoutFlow({
           orderId={state.orderId}
           qrisUrl={state.qrisUrl}
           qrString={state.qrString}
+          qrImage={state.qrImage}
           testMode={state.testMode}
           amount={state.nominal?.price_sell || state.nominal?.price || 0}
           productName={state.nominal?.name || category}

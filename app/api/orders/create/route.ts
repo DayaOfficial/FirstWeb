@@ -1,8 +1,8 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-import { getSettings, getPakasir } from '@/lib/server-config';
+import { getSettings, getNPay } from '@/lib/server-config';
 import { NextResponse } from 'next/server';
 import { generateOrderCode } from '@/lib/utils';
-import { createPakasirQris } from '@/lib/pakasir';
+import { createNPayQris } from '@/lib/npay';
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -110,14 +110,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Gagal membuat pesanan: ' + error.message }, { status: 500 });
   }
 
-  // === Integrasi Pakasir QRIS ===
-  // Mengikuti pola persis dari kode referensi Pakasir:
-  //   POST https://app.pakasir.com/api/transactioncreate/qris
-  //   body: { project: slug, order_id, amount, api_key }
-  //   response: { payment: { payment_number: "QR_STRING", expired_at, ... } }
-  //   Render QR string menjadi gambar adalah tanggung jawab merchant (frontend)
+  // === Integrasi NPay QRIS ===
 
-  // Test mode HANYA untuk owner — member selalu pakai Pakasir production
+  // Test mode HANYA untuk owner — member selalu pakai NPay production
   const userRole = user.user_metadata?.role;
   let testMode = false;
   if (userRole === 'owner') {
@@ -126,48 +121,51 @@ export async function POST(req: Request) {
   }
 
   let qrString: string | null = null;
-  let pakasirExpiresAt: string | null = null;
+  let qrImage: string | null = null;
+  let npayExpiresAt: string | null = null;
   let totalPayment: number | null = null;
-  let pakasirError: string | null = null;
+  let npayError: string | null = null;
 
   if (!testMode) {
     try {
-      const pk = await getPakasir();
-      console.log('[Pakasir] Creating QRIS:', { project: pk.slug, order_id: orderCode, amount: Number(amount) });
+      const npay = await getNPay();
+      console.log('[NPay] Creating QRIS:', { qrisId: npay.qrisId, order_id: orderCode, amount: Number(amount) });
 
-      const r = await createPakasirQris(pk, orderCode, Number(amount));
+      const r = await createNPayQris(npay, orderCode, Number(amount));
 
-      if (r.ok && r.qrString) {
+      if (r.ok && (r.qrString || r.qrImage)) {
         qrString = r.qrString;
-        pakasirExpiresAt = r.expiredAt;
+        qrImage = r.qrImage;
+        npayExpiresAt = r.expiredAt;
         totalPayment = r.totalPayment;
 
-        // Simpan QR string + referensi ke order agar bisa di-resume
+        // Simpan QR + referensi ke order agar bisa di-resume
         await serviceSupabase.from('orders').update({
           payment_ref: r.txnId || orderCode,
-          qris_url: qrString,
-          ...(pakasirExpiresAt ? { expires_at: pakasirExpiresAt } : {}),
+          qris_url: qrString || qrImage,
+          ...(npayExpiresAt ? { expires_at: npayExpiresAt } : {}),
           meta: {
             ...meta,
-            pakasir_version: r.version,
-            pakasir_txn_id: r.txnId,
-            pakasir_fee: r.fee,
-            pakasir_total: r.totalPayment,
-            pakasir_sandbox: r.isSandbox,
+            npay_txn_id: r.txnId,
+            npay_fee: r.fee,
+            npay_total: r.totalPayment,
+            npay_base_amount: r.baseAmount,
+            npay_sumber: r.sumber,
+            npay_qr_image: r.qrImage,
           },
         }).eq('id', order.id);
 
-        console.log(`[Pakasir] ✅ QR diterima via ${r.version}, panjang:`, qrString.length);
+        console.log(`[NPay] ✅ QR diterima, txn: ${r.txnId}, panjang qr_string:`, qrString?.length ?? 0);
       } else {
-        pakasirError = r.error || 'QR tidak diterima dari Pakasir';
-        console.error('[Pakasir] Gagal:', pakasirError);
+        npayError = r.error || 'QR tidak diterima dari NPay';
+        console.error('[NPay] Gagal:', npayError);
         await serviceSupabase.from('orders').update({
-          meta: { ...meta, pakasir_error: pakasirError },
+          meta: { ...meta, npay_error: npayError },
         }).eq('id', order.id);
       }
     } catch (err: any) {
-      pakasirError = err?.message || String(err);
-      console.error('[Pakasir] Error:', pakasirError);
+      npayError = err?.message || String(err);
+      console.error('[NPay] Error:', npayError);
       // Lanjut tanpa QR — tidak gagalkan order
     }
   }
@@ -176,10 +174,11 @@ export async function POST(req: Request) {
     orderId: order.id,
     orderCode: order.order_code,
     qrString,
+    qrImage,
     testMode,
     amount: Number(amount),
     totalPayment,
-    pakasirError,
-    expiresAt: pakasirExpiresAt || expiresAt.toISOString(),
+    npayError,
+    expiresAt: npayExpiresAt || expiresAt.toISOString(),
   });
 }
