@@ -50,7 +50,7 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, qrImage, testM
   const effectiveQrString = qrString || (!qrisUrlIsImage ? qrisUrl : null) || fetchedQr;
 
   useEffect(() => {
-    if (!orderId || testMode || qrString || qrisUrl) return;
+    if (!orderId || testMode || qrString || qrImage || qrisUrl) return;
     let cancelled = false;
     let attempts = 0;
     setQrLoading(true);
@@ -79,7 +79,7 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, qrImage, testM
     };
     load();
     return () => { cancelled = true; };
-  }, [orderId, testMode, qrString, qrisUrl]);
+  }, [orderId, testMode, qrString, qrImage, qrisUrl]);
 
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -90,7 +90,7 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, qrImage, testM
     }
   }, [effectiveQrString]);
 
-  // Nominal yang ditampilkan: totalPayment dari Pakasir (termasuk fee), atau amount
+  // Nominal yang ditampilkan: totalPayment dari NPay (termasuk fee), atau amount
   const displayAmount = totalPayment || fetchedTotal || amount;
 
   // Timer countdown

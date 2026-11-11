@@ -245,7 +245,10 @@ export default function OwnerApiPage() {
 
   const isConnected = (providerId: string) => {
     const c = configs[providerId];
-    return c && c.apiKey && c.apiKey.length > 0;
+    if (!c) return false;
+    // NPay pakai licenseKey, bukan apiKey
+    if (providerId === 'npay') return !!(c.licenseKey && c.licenseKey.length > 0);
+    return !!(c.apiKey && c.apiKey.length > 0);
   };
 
   const updateField = (providerId: string, fieldKey: string, value: string) => {

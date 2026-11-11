@@ -6,6 +6,7 @@ import { ChevronRight, ShieldCheck, ArrowLeft, Package, MessageCircle, Copy, Che
 import { formatRupiah } from '@/lib/utils';
 import BrandImage from '@/components/ui/BrandImage';
 import { createClient } from '@/lib/supabase/client';
+import PaymentStep from '@/components/checkout/payment-step';
 import type { NokosApp, NokosCountry } from '@/types';
 
 function getStockColor(stock: number) {
@@ -26,12 +27,21 @@ export default function NokosPage() {
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [selectedCountryId, setSelectedCountryId] = useState<string | null>(null);
 
-  // Buy flow (no name/WA input — buyer fills via WhatsApp)
+  // Buy flow
   const [showConfirm, setShowConfirm] = useState(false);
-  const [orderDone, setOrderDone] = useState(false);
-  const [formatText, setFormatText] = useState('');
-  const [copied, setCopied] = useState(false);
-  const [ownerWA, setOwnerWA] = useState('6287800001232');
+  const [ordering, setOrdering] = useState(false);
+
+  // Payment state
+  const [paymentData, setPaymentData] = useState<{
+    orderId: string;
+    qrString: string | null;
+    qrImage: string | null;
+    testMode: boolean;
+    amount: number;
+    totalPayment: number | null;
+    expiresAt: string | null;
+    productName: string;
+  } | null>(null);
 
   // Load from Supabase
   useEffect(() => {
@@ -54,10 +64,6 @@ export default function NokosPage() {
           price: Number(c.price), stock: c.stock as number, description: (c.description as string) || '', isActive: true
         })));
       }
-
-      // Load owner WA
-      const { data: waData } = await supabase.from('settings').select('value').eq('key', 'owner_whatsapp').single();
-      if (waData?.value) setOwnerWA(waData.value);
     };
     loadData();
   }, []);
@@ -77,76 +83,99 @@ export default function NokosPage() {
   }, [countries]);
 
   const handleConfirmBuy = async () => {
-    if (!selectedCountry || !selectedApp) return;
+    if (!selectedCountry || !selectedApp || ordering) return;
+    setOrdering(true);
 
-    const supabase = createClient();
-    const newStock = Math.max(0, selectedCountry.stock - 1);
-    await supabase.from('nokos_countries').update({ stock: newStock }).eq('id', selectedCountry.id);
-    setCountries(prev => prev.map(c => c.id === selectedCountry.id ? { ...c, stock: newStock } : c));
+    try {
+      // Buat order via API (bukan langsung insert) supaya ada QRIS
+      const res = await fetch('/api/orders/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          product_name: `Nokos ${selectedApp.name} - ${selectedCountry.flagEmoji} ${selectedCountry.countryName}`,
+          amount: selectedCountry.price,
+        }),
+      });
 
-    const orderCode = `DM-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
-    await supabase.from('orders').insert({
-      order_code: orderCode,
-      product_name: `Nokos ${selectedApp.name} - ${selectedCountry.countryName}`,
-      module: 'nokos',
-      amount: selectedCountry.price,
-      process_status: 'waiting',
-      payment_status: 'pending',
-    });
+      const data = await res.json();
 
-    // Load message template
-    const { data: tmpl } = await supabase
-      .from('message_templates')
-      .select('content')
-      .eq('template_key', 'nokos')
-      .single();
+      if (!res.ok) {
+        alert('Gagal membuat pesanan: ' + (data?.error || 'Unknown'));
+        setOrdering(false);
+        return;
+      }
 
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      // Kurangi stok
+      const supabase = createClient();
+      const newStock = Math.max(0, selectedCountry.stock - 1);
+      await supabase.from('nokos_countries').update({ stock: newStock }).eq('id', selectedCountry.id);
+      setCountries(prev => prev.map(c => c.id === selectedCountry.id ? { ...c, stock: newStock } : c));
 
-    let text = tmpl?.content || `Halo! Saya ingin order Nokos.\n\nOrder: Nokos {aplikasi} - {negara}\nOrder ID: {order_id}\nHarga: {harga}\nTanggal: ${dateStr}\n\nNama: (isi nama Anda)\nNo. WA: (isi nomor Anda)`;
-    text = text
-      .replace(/{order_id}/g, orderCode)
-      .replace(/{aplikasi}/g, selectedApp.name)
-      .replace(/{negara}/g, `${selectedCountry.flagEmoji} ${selectedCountry.countryName}`)
-      .replace(/{harga}/g, formatRupiah(selectedCountry.price))
-      .replace(/{nama}/g, '............')
-      .replace(/{nomor}/g, '(akan dikirim admin)');
+      // Set payment data untuk tampilkan QRIS
+      setPaymentData({
+        orderId: data.orderId,
+        qrString: data.qrString || null,
+        qrImage: data.qrImage || null,
+        testMode: data.testMode || false,
+        amount: selectedCountry.price,
+        totalPayment: data.totalPayment || null,
+        expiresAt: data.expiresAt || null,
+        productName: `Nokos ${selectedApp.name} - ${selectedCountry.countryName}`,
+      });
 
-    setFormatText(text);
-    setOrderDone(true);
-    setShowConfirm(false);
-  };
-
-  const copyFormat = () => {
-    navigator.clipboard.writeText(formatText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const goToWhatsApp = () => {
-    const url = `https://wa.me/${ownerWA}?text=${encodeURIComponent(formatText)}`;
-    window.open(url, '_blank');
+      setShowConfirm(false);
+    } catch {
+      alert('Gagal: Kesalahan jaringan');
+    }
+    setOrdering(false);
   };
 
   /* ─── LEVEL 3: Detail & Beli ─── */
   if (selectedApp && selectedCountry) {
     const outOfStock = selectedCountry.stock === 0;
+
+    // ── PAYMENT STEP: tampilkan QRIS ──
+    if (paymentData) {
+      return (
+        <div className="space-y-6 animate-fade-in">
+          <nav className="flex items-center gap-2 text-sm text-on-surface-variant flex-wrap">
+            <Link href="/" className="hover:text-primary transition-colors">Beranda</Link>
+            <ChevronRight size={14} />
+            <button onClick={() => { setSelectedAppId(null); setSelectedCountryId(null); setPaymentData(null); }} className="hover:text-primary transition-colors">Nokos</button>
+            <ChevronRight size={14} />
+            <span className="text-primary font-semibold">Pembayaran</span>
+          </nav>
+
+          <PaymentStep
+            orderId={paymentData.orderId}
+            qrisUrl={null}
+            qrString={paymentData.qrString}
+            qrImage={paymentData.qrImage}
+            testMode={paymentData.testMode}
+            amount={paymentData.amount}
+            totalPayment={paymentData.totalPayment ?? undefined}
+            productName={paymentData.productName}
+            expiresAt={paymentData.expiresAt}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-6 animate-fade-in">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-2 text-sm text-on-surface-variant flex-wrap">
           <Link href="/" className="hover:text-primary transition-colors">Beranda</Link>
           <ChevronRight size={14} />
-          <button onClick={() => { setSelectedAppId(null); setSelectedCountryId(null); setOrderDone(false); }} className="hover:text-primary transition-colors">Nokos</button>
+          <button onClick={() => { setSelectedAppId(null); setSelectedCountryId(null); }} className="hover:text-primary transition-colors">Nokos</button>
           <ChevronRight size={14} />
-          <button onClick={() => { setSelectedCountryId(null); setOrderDone(false); }} className="hover:text-primary transition-colors">{selectedApp.name}</button>
+          <button onClick={() => { setSelectedCountryId(null); }} className="hover:text-primary transition-colors">{selectedApp.name}</button>
           <ChevronRight size={14} />
           <span className="text-primary font-semibold">{selectedCountry.countryName}</span>
         </nav>
 
         {/* Back */}
-        <button onClick={() => { setSelectedCountryId(null); setOrderDone(false); }}
+        <button onClick={() => { setSelectedCountryId(null); }}
           className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors group">
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
           Kembali ke Negara
@@ -175,37 +204,8 @@ export default function NokosPage() {
                 </div>
               </div>
 
-              {/* ── ORDER DONE: Format Pesan ── */}
-              {orderDone && (
-                <div className="space-y-4 animate-fade-in">
-                  <div className="bg-accent-green/10 border border-accent-green/30 rounded-xl p-4 text-sm text-accent-green font-semibold flex items-center gap-2">
-                    <CheckCircle2 size={18} />
-                    Pesanan tercatat! Salin format di bawah & kirim ke WhatsApp owner.
-                  </div>
-
-                  {/* Format text box */}
-                  <div className="bg-surface-container-low rounded-xl border border-outline-variant p-4">
-                    <p className="text-xs text-on-surface-variant font-semibold mb-2">📋 Format Pesan:</p>
-                    <pre className="text-sm text-on-surface whitespace-pre-wrap font-sans leading-relaxed">{formatText}</pre>
-                  </div>
-
-                  {/* Action buttons */}
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <button onClick={copyFormat}
-                      className="flex-1 py-3 rounded-full border-2 border-primary text-primary font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary/5 transition-colors">
-                      {copied ? <><CheckCircle2 size={16} /> Tersalin!</> : <><Copy size={16} /> Salin Format</>}
-                    </button>
-                    <button onClick={goToWhatsApp}
-                      className="flex-1 py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2">
-                      <MessageCircle size={16} /> Lanjut ke WhatsApp
-                      <ExternalLink size={14} />
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* ── CONFIRM DIALOG ── */}
-              {showConfirm && !orderDone && (
+              {showConfirm && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-4 animate-fade-in">
                   <p className="text-sm font-semibold text-amber-800">⚠️ Konfirmasi Pesanan</p>
                   <div className="text-sm text-amber-700 space-y-1">
@@ -213,24 +213,25 @@ export default function NokosPage() {
                     <p>Negara: <strong>{selectedCountry.flagEmoji} {selectedCountry.countryName}</strong></p>
                     <p>Total: <strong className="text-primary">{formatRupiah(selectedCountry.price)}</strong></p>
                   </div>
+                  <p className="text-xs text-amber-600">Anda akan diarahkan ke halaman pembayaran QRIS setelah konfirmasi.</p>
                   <div className="flex gap-3">
                     <button onClick={() => setShowConfirm(false)}
                       className="flex-1 py-2.5 rounded-full border border-outline-variant text-on-surface-variant font-semibold text-sm hover:bg-surface-container-high transition-colors">
                       Batal
                     </button>
-                    <button onClick={handleConfirmBuy}
-                      className="flex-1 py-2.5 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all">
-                      Konfirmasi & Pesan
+                    <button onClick={handleConfirmBuy} disabled={ordering}
+                      className="flex-1 py-2.5 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all disabled:opacity-50">
+                      {ordering ? 'Memproses...' : 'Konfirmasi & Bayar'}
                     </button>
                   </div>
                 </div>
               )}
 
               {/* ── BUY BUTTON (initial state) ── */}
-              {!outOfStock && !showConfirm && !orderDone && (
+              {!outOfStock && !showConfirm && (
                 <button onClick={() => setShowConfirm(true)}
                   className="w-full py-3.5 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2">
-                  <MessageCircle size={18} />
+                  <Package size={18} />
                   Pesan Sekarang — {formatRupiah(selectedCountry.price)}
                 </button>
               )}
