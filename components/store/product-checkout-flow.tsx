@@ -100,9 +100,14 @@ export default function ProductCheckoutFlow({
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryTab, setCategoryTab] = useState('');
 
-  // Get unique categories for tab filtering
+  // Get unique categories for tab filtering — Pulsa first, then Data
   const productCategories = showCategoryTabs
-    ? Array.from(new Set(products.map(p => p.category).filter(Boolean))) as string[]
+    ? Array.from(new Set(products.map(p => p.category).filter(Boolean)))
+        .sort((a, b) => {
+          if (a === 'Pulsa') return -1;
+          if (b === 'Pulsa') return 1;
+          return a!.localeCompare(b!);
+        }) as string[]
     : [];
 
   // Set default tab on mount
