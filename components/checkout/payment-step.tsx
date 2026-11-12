@@ -16,9 +16,13 @@ interface PaymentStepProps {
   totalPayment?: number;
   productName: string;
   expiresAt?: string | null;
+  /** Custom success render — jika di-set, tampilkan ini bukan default success screen */
+  successContent?: React.ReactNode;
+  /** Callback saat pembayaran berhasil */
+  onSuccess?: () => void;
 }
 
-export default function PaymentStep({ orderId, qrisUrl, qrString, qrImage, testMode, amount, totalPayment, productName, expiresAt }: PaymentStepProps) {
+export default function PaymentStep({ orderId, qrisUrl, qrString, qrImage, testMode, amount, totalPayment, productName, expiresAt, successContent, onSuccess }: PaymentStepProps) {
   const EXPIRE_SECONDS = 10 * 60; // 10 menit default
   const [timeLeft, setTimeLeft] = useState(() => {
     if (expiresAt) {
@@ -137,6 +141,11 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, qrImage, testM
     return () => clearInterval(poll);
   }, [orderId, status]);
 
+  // Trigger onSuccess callback
+  useEffect(() => {
+    if (status === 'success' && onSuccess) onSuccess();
+  }, [status, onSuccess]);
+
   // Auto-expire handler
   const handleAutoExpire = useCallback(async () => {
     if (!orderId) return;
@@ -253,6 +262,9 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, qrImage, testM
     : '';
 
   if (status === 'success') {
+    // Custom success content (e.g. Nokos format teks)
+    if (successContent) return <>{successContent}</>;
+
     return (
       <div className="max-w-md mx-auto text-center py-12 animate-fade-in space-y-6">
         <CheckCircle2 size={64} className="mx-auto mb-2 text-accent-green" />

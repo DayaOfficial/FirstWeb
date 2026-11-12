@@ -34,6 +34,7 @@ export default function NokosPage() {
   // Payment state
   const [paymentData, setPaymentData] = useState<{
     orderId: string;
+    orderCode: string;
     qrString: string | null;
     qrImage: string | null;
     testMode: boolean;
@@ -42,6 +43,12 @@ export default function NokosPage() {
     expiresAt: string | null;
     productName: string;
   } | null>(null);
+
+  // After-payment success state
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [formatText, setFormatText] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [ownerWA, setOwnerWA] = useState('6287800001232');
 
   // Load from Supabase
   useEffect(() => {
@@ -64,6 +71,10 @@ export default function NokosPage() {
           price: Number(c.price), stock: c.stock as number, description: (c.description as string) || '', isActive: true
         })));
       }
+
+      // Load owner WA
+      const { data: waData } = await supabase.from('settings').select('value').eq('key', 'owner_whatsapp').single();
+      if (waData?.value) setOwnerWA(waData.value);
     };
     loadData();
   }, []);
@@ -114,6 +125,7 @@ export default function NokosPage() {
       // Set payment data untuk tampilkan QRIS
       setPaymentData({
         orderId: data.orderId,
+        orderCode: data.orderCode,
         qrString: data.qrString || null,
         qrImage: data.qrImage || null,
         testMode: data.testMode || false,
@@ -130,20 +142,93 @@ export default function NokosPage() {
     setOrdering(false);
   };
 
+  // Saat pembayaran berhasil: load template format teks dari settings
+  const handlePaymentSuccess = useCallback(async () => {
+    if (!paymentData || !selectedApp || !selectedCountry) return;
+
+    const supabase = createClient();
+    const { data: tmpl } = await supabase
+      .from('message_templates')
+      .select('content')
+      .eq('template_key', 'nokos')
+      .single();
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    let text = tmpl?.content || `Halo! Saya sudah bayar untuk order Nokos.\n\nOrder: Nokos {aplikasi} - {negara}\nOrder ID: {order_id}\nHarga: {harga}\nTanggal: ${dateStr}\n\nNama: (isi nama Anda)\nNo. WA: (isi nomor Anda)`;
+    text = text
+      .replace(/{order_id}/g, paymentData.orderCode || paymentData.orderId)
+      .replace(/{aplikasi}/g, selectedApp.name)
+      .replace(/{negara}/g, `${selectedCountry.flagEmoji} ${selectedCountry.countryName}`)
+      .replace(/{harga}/g, formatRupiah(selectedCountry.price))
+      .replace(/{nama}/g, '............')
+      .replace(/{nomor}/g, '(akan dikirim admin)');
+
+    setFormatText(text);
+    setPaymentSuccess(true);
+  }, [paymentData, selectedApp, selectedCountry]);
+
+  const copyFormat = () => {
+    navigator.clipboard.writeText(formatText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const goToWhatsApp = () => {
+    const url = `https://wa.me/${ownerWA.replace(/^0/, '62').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(formatText)}`;
+    window.open(url, '_blank');
+  };
+
   /* ─── LEVEL 3: Detail & Beli ─── */
   if (selectedApp && selectedCountry) {
     const outOfStock = selectedCountry.stock === 0;
 
     // ── PAYMENT STEP: tampilkan QRIS ──
     if (paymentData) {
+      const successView = (
+        <div className="max-w-md mx-auto py-8 animate-fade-in space-y-6">
+          <div className="text-center">
+            <CheckCircle2 size={64} className="mx-auto mb-3 text-accent-green" />
+            <h2 className="text-xl font-bold text-on-surface font-[family-name:var(--font-heading)]">Pembayaran Berhasil!</h2>
+            <p className="text-sm text-on-surface-variant mt-2">Salin format di bawah & kirim ke WhatsApp owner untuk diproses.</p>
+          </div>
+
+          {formatText && (
+            <>
+              <div className="bg-surface-container-low rounded-xl border border-outline-variant p-4">
+                <p className="text-xs text-on-surface-variant font-semibold mb-2">📋 Format Pesan:</p>
+                <pre className="text-sm text-on-surface whitespace-pre-wrap font-sans leading-relaxed">{formatText}</pre>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button onClick={copyFormat}
+                  className="flex-1 py-3 rounded-full border-2 border-primary text-primary font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary/5 transition-colors">
+                  {copied ? <><CheckCircle2 size={16} /> Tersalin!</> : <><Copy size={16} /> Salin Format</>}
+                </button>
+                <button onClick={goToWhatsApp}
+                  className="flex-1 py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2">
+                  <MessageCircle size={16} /> Lanjut ke WhatsApp
+                  <ExternalLink size={14} />
+                </button>
+              </div>
+            </>
+          )}
+
+          <Link href="/profil" className="block text-center text-sm text-primary font-semibold hover:underline">
+            Lihat Riwayat Transaksi →
+          </Link>
+        </div>
+      );
+
       return (
         <div className="space-y-6 animate-fade-in">
           <nav className="flex items-center gap-2 text-sm text-on-surface-variant flex-wrap">
             <Link href="/" className="hover:text-primary transition-colors">Beranda</Link>
             <ChevronRight size={14} />
-            <button onClick={() => { setSelectedAppId(null); setSelectedCountryId(null); setPaymentData(null); }} className="hover:text-primary transition-colors">Nokos</button>
+            <button onClick={() => { setSelectedAppId(null); setSelectedCountryId(null); setPaymentData(null); setPaymentSuccess(false); }} className="hover:text-primary transition-colors">Nokos</button>
             <ChevronRight size={14} />
-            <span className="text-primary font-semibold">Pembayaran</span>
+            <span className="text-primary font-semibold">{paymentSuccess ? 'Selesai' : 'Pembayaran'}</span>
           </nav>
 
           <PaymentStep
@@ -156,6 +241,8 @@ export default function NokosPage() {
             totalPayment={paymentData.totalPayment ?? undefined}
             productName={paymentData.productName}
             expiresAt={paymentData.expiresAt}
+            onSuccess={handlePaymentSuccess}
+            successContent={paymentSuccess ? successView : undefined}
           />
         </div>
       );

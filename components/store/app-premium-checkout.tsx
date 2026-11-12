@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useCheckout } from '@/hooks/use-checkout';
 import ConfirmationStep from '@/components/checkout/confirmation-step';
 import PaymentStep from '@/components/checkout/payment-step';
 import { formatRupiah } from '@/lib/utils';
-import { ChevronRight, Crown, Package } from 'lucide-react';
+import { ChevronRight, Crown, Package, Copy, CheckCircle2, MessageCircle, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
@@ -60,6 +60,98 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
   const [step, setStep] = useState<'app' | 'plan' | 'confirm' | 'payment'>('app');
   const price = selectedPlan?.price || 0;
   const brands = [...new Set(apps.map(a => a.brand || 'Lainnya'))];
+
+  // After-payment success state
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [formatText, setFormatText] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [ownerWA, setOwnerWA] = useState('');
+
+  // Load owner WA on mount
+  useEffect(() => {
+    (async () => {
+      const supabase = createClient();
+      const { data } = await supabase.from('settings').select('value').eq('key', 'owner_whatsapp').single();
+      if (data?.value) setOwnerWA(data.value);
+    })();
+  }, []);
+
+  // Saat pembayaran berhasil: load template format teks
+  const handlePaymentSuccess = useCallback(async () => {
+    if (!selectedApp || !selectedPlan) return;
+
+    const supabase = createClient();
+    const { data: tmpl } = await supabase
+      .from('message_templates')
+      .select('content')
+      .eq('template_key', 'app_premium')
+      .single();
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    let text = tmpl?.content || `Halo! Saya sudah bayar untuk order App Premium.\n\nAplikasi: {aplikasi}\nPlan: {plan}\nOrder ID: {order_id}\nHarga: {harga}\nTanggal: ${dateStr}\n\nNama: {nama}\nMohon diproses, terima kasih! 🙏`;
+    text = text
+      .replace(/{order_id}/g, state.orderId || '-')
+      .replace(/{aplikasi}/g, selectedApp.name)
+      .replace(/{plan}/g, selectedPlan.name)
+      .replace(/{harga}/g, formatRupiah(price))
+      .replace(/{nama}/g, username || '............')
+      .replace(/{nomor}/g, '(akan dikirim admin)');
+
+    setFormatText(text);
+    setPaymentSuccess(true);
+  }, [selectedApp, selectedPlan, state.orderId, price, username]);
+
+  const copyFormat = () => {
+    navigator.clipboard.writeText(formatText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const goToWhatsApp = () => {
+    if (!ownerWA) return;
+    const url = `https://wa.me/${ownerWA.replace(/^0/, '62').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(formatText)}`;
+    window.open(url, '_blank');
+  };
+
+  // Success content untuk PaymentStep
+  const successView = paymentSuccess ? (
+    <div className="max-w-md mx-auto py-8 animate-fade-in space-y-6">
+      <div className="text-center">
+        <CheckCircle2 size={64} className="mx-auto mb-3 text-accent-green" />
+        <h2 className="text-xl font-bold text-on-surface font-[family-name:var(--font-heading)]">Pembayaran Berhasil!</h2>
+        <p className="text-sm text-on-surface-variant mt-2">Salin format di bawah & kirim ke WhatsApp owner untuk diproses.</p>
+      </div>
+
+      {formatText && (
+        <>
+          <div className="bg-surface-container-low rounded-xl border border-outline-variant p-4">
+            <p className="text-xs text-on-surface-variant font-semibold mb-2">📋 Format Pesan:</p>
+            <pre className="text-sm text-on-surface whitespace-pre-wrap font-sans leading-relaxed">{formatText}</pre>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button onClick={copyFormat}
+              className="flex-1 py-3 rounded-full border-2 border-primary text-primary font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary/5 transition-colors">
+              {copied ? <><CheckCircle2 size={16} /> Tersalin!</> : <><Copy size={16} /> Salin Format</>}
+            </button>
+            {ownerWA && (
+              <button onClick={goToWhatsApp}
+                className="flex-1 py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2">
+                <MessageCircle size={16} /> Lanjut ke WhatsApp
+                <ExternalLink size={14} />
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      <Link href="/profil" className="block text-center text-sm text-primary font-semibold hover:underline">
+        Lihat Riwayat Transaksi →
+      </Link>
+    </div>
+  ) : undefined;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -256,6 +348,7 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
               go({
                 orderId: data.orderId,
                 qrString: data.qrString || null,
+                qrImage: data.qrImage || null,
                 testMode: data.testMode || false,
               });
             } catch {
@@ -273,9 +366,12 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
           orderId={state.orderId}
           qrisUrl={state.qrisUrl}
           qrString={state.qrString}
+          qrImage={state.qrImage}
           testMode={state.testMode}
           amount={price}
           productName={`${selectedApp?.name} — ${selectedPlan?.name}`}
+          onSuccess={handlePaymentSuccess}
+          successContent={successView}
         />
       )}
     </div>

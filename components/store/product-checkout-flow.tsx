@@ -6,7 +6,7 @@ import PaymentStep from '@/components/checkout/payment-step';
 import { formatRupiah } from '@/lib/utils';
 import { ChevronRight, Search, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 /* Brand color & icon mapping */
 const BRAND_META: Record<string, { color: string; icon: string }> = {
@@ -43,6 +43,7 @@ interface ProductItem {
   price_sell: number;
   buyer_sku_code?: string;
   provider_service_id?: string;
+  category?: string;
 }
 
 interface ProductCheckoutFlowProps {
@@ -53,6 +54,7 @@ interface ProductCheckoutFlowProps {
   products: ProductItem[];
   category: string;
   showBrandFilter?: boolean;
+  showCategoryTabs?: boolean;
   inputHelper?: string;
 }
 
@@ -90,22 +92,40 @@ function BrandCard({ brand, count, selected, onClick }: { brand: string; count: 
 
 export default function ProductCheckoutFlow({
   title, inputLabel, inputPlaceholder, inputType = 'tel',
-  products, category, showBrandFilter = true, inputHelper,
+  products, category, showBrandFilter = true, showCategoryTabs = false, inputHelper,
 }: ProductCheckoutFlowProps) {
   const { state, actions } = useCheckout({ name: category, needs_target: true });
   const [targetValue, setTargetValue] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryTab, setCategoryTab] = useState('');
 
-  // Get unique brands with counts
+  // Get unique categories for tab filtering
+  const productCategories = showCategoryTabs
+    ? Array.from(new Set(products.map(p => p.category).filter(Boolean))) as string[]
+    : [];
+
+  // Set default tab on mount
+  useEffect(() => {
+    if (showCategoryTabs && productCategories.length > 0 && !categoryTab) {
+      setCategoryTab(productCategories[0]);
+    }
+  }, [showCategoryTabs, productCategories.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filter by category tab first
+  const categoryFiltered = showCategoryTabs && categoryTab
+    ? products.filter(p => p.category === categoryTab)
+    : products;
+
+  // Get unique brands with counts (from category-filtered products)
   const brandCounts = new Map<string, number>();
-  for (const p of products) {
+  for (const p of categoryFiltered) {
     if (p.brand) brandCounts.set(p.brand, (brandCounts.get(p.brand) || 0) + 1);
   }
   const brands = Array.from(brandCounts.keys());
 
   // Filter products
-  const filtered = products
+  const filtered = categoryFiltered
     .filter(p => !brandFilter || p.brand === brandFilter)
     .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -157,6 +177,25 @@ export default function ProductCheckoutFlow({
               <span className="font-semibold text-on-surface">{state.targetInput}</span>
               <button onClick={actions.back} className="ml-3 text-primary text-xs font-semibold hover:underline">Ubah</button>
             </div>
+
+            {/* Category Tabs (Pulsa / Data) */}
+            {showCategoryTabs && productCategories.length > 1 && (
+              <div className="mb-4 flex gap-2">
+                {productCategories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => { setCategoryTab(cat); setBrandFilter(''); setSearchQuery(''); }}
+                    className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
+                      categoryTab === cat
+                        ? 'gradient-primary text-white shadow-md'
+                        : 'bg-surface-container-low text-on-surface-variant border border-outline-variant/30 hover:border-primary/40 hover:text-primary'
+                    }`}
+                  >
+                    {cat === 'Pulsa' ? '📱 Pulsa' : cat === 'Data' ? '📶 Paket Data' : cat}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Brand Grid */}
             {showBrandFilter && brands.length > 1 && !brandFilter && (
