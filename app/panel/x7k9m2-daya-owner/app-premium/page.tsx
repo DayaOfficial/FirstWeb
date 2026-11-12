@@ -23,7 +23,8 @@ interface Plan {
 }
 
 const APP_CATEGORIES = ['Streaming', 'Musik', 'Editing', 'Edukasi', 'Produktivitas', 'VPN', 'Desain', 'Cloud'];
-const PLAN_OPTIONS = ['1U', '2U', '5U', '8U', 'Semi', 'Sharing', 'Private', '1 Bulan', '3 Bulan', '6 Bulan', '1 Tahun'];
+const PLAN_DURATIONS = ['7 Hari', '14 Hari', '1 Bulan', '3 Bulan', '6 Bulan', '1 Tahun'];
+const PLAN_TYPES = ['Private', 'Sharing', 'Semi', '1U', '2U', '5U', '8U'];
 
 export default function AppPremiumOwnerPage() {
   const sb = createClient();
@@ -31,7 +32,7 @@ export default function AppPremiumOwnerPage() {
   const [plans, setPlans] = useState<Record<string, Plan[]>>({});
   const [appForm, setAppForm] = useState({ name: '', category: 'Streaming', image_url: '' });
   const [planFor, setPlanFor] = useState<string | null>(null);
-  const [pForm, setPForm] = useState({ plan: '1U', price: '', stock: '' });
+  const [pForm, setPForm] = useState({ duration: '1 Bulan', type: 'Private', price: '', stock: '' });
   const [expandedApps, setExpandedApps] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -103,13 +104,14 @@ export default function AppPremiumOwnerPage() {
 
   async function addPlan(appId: string) {
     if (!pForm.price) return alert('Harga wajib diisi');
+    const planName = `${pForm.duration} ${pForm.type}`;
     await sb.from('product_plans').insert({
       product_id: appId,
-      plan_name: pForm.plan,
+      plan_name: planName,
       price: Number(pForm.price),
       stock: Number(pForm.stock || 0),
     });
-    setPForm({ plan: '1U', price: '', stock: '' });
+    setPForm({ duration: '1 Bulan', type: 'Private', price: '', stock: '' });
     setPlanFor(null);
     load();
   }
@@ -271,40 +273,61 @@ export default function AppPremiumOwnerPage() {
 
                   {/* Add plan form */}
                   {planFor === app.id && (
-                    <div className="px-5 pb-3 flex flex-wrap gap-2 animate-fade-in">
-                      <select
-                        value={pForm.plan}
-                        onChange={e => setPForm({ ...pForm, plan: e.target.value })}
-                        className="px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
-                      >
-                        {PLAN_OPTIONS.map(p => <option key={p}>{p}</option>)}
-                      </select>
-                      <input
-                        placeholder="Harga (Rp)"
-                        type="number"
-                        value={pForm.price}
-                        onChange={e => setPForm({ ...pForm, price: e.target.value })}
-                        className="w-32 px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
-                      />
-                      <input
-                        placeholder="Stok"
-                        type="number"
-                        value={pForm.stock}
-                        onChange={e => setPForm({ ...pForm, stock: e.target.value })}
-                        className="w-24 px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
-                      />
-                      <button
-                        onClick={() => addPlan(app.id)}
-                        className="px-4 py-2 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 transition-all"
-                      >
-                        Simpan
-                      </button>
-                      <button
-                        onClick={() => setPlanFor(null)}
-                        className="px-3 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:text-error hover:border-error transition-colors"
-                      >
-                        Batal
-                      </button>
+                    <div className="px-5 pb-3 space-y-2 animate-fade-in">
+                      <div className="flex flex-wrap gap-2 items-end">
+                        <div>
+                          <span className="text-[11px] text-on-surface-variant font-medium block mb-1">Durasi</span>
+                          <select
+                            value={pForm.duration}
+                            onChange={e => setPForm({ ...pForm, duration: e.target.value })}
+                            className="px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
+                          >
+                            {PLAN_DURATIONS.map(d => <option key={d}>{d}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-on-surface-variant font-medium block mb-1">Tipe</span>
+                          <select
+                            value={pForm.type}
+                            onChange={e => setPForm({ ...pForm, type: e.target.value })}
+                            className="px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
+                          >
+                            {PLAN_TYPES.map(t => <option key={t}>{t}</option>)}
+                          </select>
+                        </div>
+                        <input
+                          placeholder="Harga (Rp)"
+                          type="number"
+                          value={pForm.price}
+                          onChange={e => setPForm({ ...pForm, price: e.target.value })}
+                          className="w-32 px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
+                        />
+                        <input
+                          placeholder="Stok"
+                          type="number"
+                          value={pForm.stock}
+                          onChange={e => setPForm({ ...pForm, stock: e.target.value })}
+                          className="w-24 px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-on-surface-variant">Preview:</span>
+                        <span className="text-sm font-semibold text-primary">{pForm.duration} {pForm.type}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => addPlan(app.id)}
+                          className="px-4 py-2 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 transition-all"
+                        >
+                          Simpan
+                        </button>
+                        <button
+                          onClick={() => setPlanFor(null)}
+                          className="px-3 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:text-error hover:border-error transition-colors"
+                        >
+                          Batal
+                        </button>
+                      </div>
                     </div>
                   )}
 

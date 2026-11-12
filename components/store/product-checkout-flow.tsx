@@ -4,31 +4,31 @@ import { useCheckout, type NominalOption } from '@/hooks/use-checkout';
 import ConfirmationStep from '@/components/checkout/confirmation-step';
 import PaymentStep from '@/components/checkout/payment-step';
 import { formatRupiah } from '@/lib/utils';
-import { ChevronRight, Search, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Search, ArrowLeft, Smartphone, Wifi } from 'lucide-react';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 
 /* Brand color & icon mapping */
 const BRAND_META: Record<string, { color: string; icon: string }> = {
-  'TELKOMSEL':  { color: '#ED1C24', icon: 'T' },
-  'INDOSAT':    { color: '#FFDD00', icon: 'I' },
-  'XL':         { color: '#0068B7', icon: 'XL' },
-  'AXIS':       { color: '#6D2E8A', icon: 'AX' },
-  'TRI':        { color: '#FF6600', icon: '3' },
-  'SMARTFREN':  { color: '#F7941E', icon: 'SF' },
-  'BY.U':       { color: '#00AEEF', icon: 'BY' },
-  'DANA':       { color: '#118EEA', icon: 'DA' },
-  'OVO':        { color: '#4C3494', icon: 'OV' },
-  'GOPAY':      { color: '#00AAD2', icon: 'GP' },
-  'SHOPEEPAY':  { color: '#EE4D2D', icon: 'SP' },
-  'LINKAJA':    { color: '#E42313', icon: 'LA' },
-  'PLN':        { color: '#1A73E8', icon: '⚡' },
-  'GRAB':       { color: '#00B14F', icon: 'GR' },
-  'MAXIM':      { color: '#FF4444', icon: 'MX' },
-  'GARENA':     { color: '#EE4D2D', icon: 'GR' },
-  'STEAM':      { color: '#1B2838', icon: 'ST' },
-  'GOOGLE PLAY':{ color: '#34A853', icon: 'GP' },
-  'VOUCHER':    { color: '#6366F1', icon: 'V' },
+  'TELKOMSEL': { color: '#ED1C24', icon: 'T' },
+  'INDOSAT': { color: '#FFDD00', icon: 'I' },
+  'XL': { color: '#0068B7', icon: 'XL' },
+  'AXIS': { color: '#6D2E8A', icon: 'AX' },
+  'TRI': { color: '#FF6600', icon: '3' },
+  'SMARTFREN': { color: '#F7941E', icon: 'SF' },
+  'BY.U': { color: '#00AEEF', icon: 'BY' },
+  'DANA': { color: '#118EEA', icon: 'DA' },
+  'OVO': { color: '#4C3494', icon: 'OV' },
+  'GOPAY': { color: '#00AAD2', icon: 'GP' },
+  'SHOPEEPAY': { color: '#EE4D2D', icon: 'SP' },
+  'LINKAJA': { color: '#E42313', icon: 'LA' },
+  'PLN': { color: '#1A73E8', icon: '⚡' },
+  'GRAB': { color: '#00B14F', icon: 'GR' },
+  'MAXIM': { color: '#FF4444', icon: 'MX' },
+  'GARENA': { color: '#EE4D2D', icon: 'GR' },
+  'STEAM': { color: '#1B2838', icon: 'ST' },
+  'GOOGLE PLAY': { color: '#34A853', icon: 'GP' },
+  'VOUCHER': { color: '#6366F1', icon: 'V' },
 };
 
 function getBrandMeta(brand: string) {
@@ -72,11 +72,10 @@ function BrandCard({ brand, count, selected, onClick }: { brand: string; count: 
   const meta = getBrandMeta(brand);
   return (
     <button onClick={onClick}
-      className={`group relative overflow-hidden rounded-2xl p-4 border-2 transition-all duration-200 hover:shadow-md flex flex-col items-center gap-2 ${
-        selected
+      className={`group relative overflow-hidden rounded-2xl p-4 border-2 transition-all duration-200 hover:shadow-md flex flex-col items-center gap-2 ${selected
           ? 'border-primary bg-primary/5 shadow-[0_0_15px_rgba(192,0,58,0.15)]'
           : 'border-outline-variant/30 bg-surface-container-lowest hover:border-pink-300'
-      }`}
+        }`}
     >
       <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-lg shadow-md"
         style={{ backgroundColor: meta.color }}>
@@ -103,11 +102,11 @@ export default function ProductCheckoutFlow({
   // Get unique categories for tab filtering — Pulsa first, then Data
   const productCategories = showCategoryTabs
     ? Array.from(new Set(products.map(p => p.category).filter(Boolean)))
-        .sort((a, b) => {
-          if (a === 'Pulsa') return -1;
-          if (b === 'Pulsa') return 1;
-          return a!.localeCompare(b!);
-        }) as string[]
+      .sort((a, b) => {
+        if (a === 'Pulsa') return -1;
+        if (b === 'Pulsa') return 1;
+        return a!.localeCompare(b!);
+      }) as string[]
     : [];
 
   // Set default tab on mount
@@ -190,13 +189,12 @@ export default function ProductCheckoutFlow({
                   <button
                     key={cat}
                     onClick={() => { setCategoryTab(cat); setBrandFilter(''); setSearchQuery(''); }}
-                    className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
-                      categoryTab === cat
+                    className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 ${categoryTab === cat
                         ? 'gradient-primary text-white shadow-md'
                         : 'bg-surface-container-low text-on-surface-variant border border-outline-variant/30 hover:border-primary/40 hover:text-primary'
-                    }`}
+                      }`}
                   >
-                    {cat === 'Pulsa' ? '📱 Pulsa' : cat === 'Data' ? '📶 Paket Data' : cat}
+                    {cat === 'Pulsa' ? <><Smartphone size={16} /> Pulsa</> : cat === 'Data' ? <><Wifi size={16} /> Paket Data</> : cat}
                   </button>
                 ))}
               </div>
@@ -268,11 +266,10 @@ export default function ProductCheckoutFlow({
                         buyer_sku_code: n.buyer_sku_code,
                         provider_code: n.provider_service_id,
                       } as NominalOption)}
-                      className={`p-4 rounded-2xl border-2 text-left transition-all duration-200 hover:shadow-md ${
-                        state.nominal?.id === n.id
+                      className={`p-4 rounded-2xl border-2 text-left transition-all duration-200 hover:shadow-md ${state.nominal?.id === n.id
                           ? 'border-primary bg-primary/5 shadow-[0_0_15px_rgba(192,0,58,0.15)]'
                           : 'border-outline-variant/30 hover:border-pink-300'
-                      }`}
+                        }`}
                     >
                       <p className="font-semibold text-sm text-on-surface leading-tight">{n.name}</p>
                       <p className="text-primary font-bold mt-1 font-[family-name:var(--font-heading)]">
