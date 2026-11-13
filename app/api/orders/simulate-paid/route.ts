@@ -52,14 +52,21 @@ export async function POST(req: Request) {
     }, { status: 400 });
   }
 
+  const updateData: Record<string, any> = {
+    payment_status: 'paid',
+    paid_at: new Date().toISOString(),
+    payment_method: 'test_mode',
+    updated_at: new Date().toISOString(),
+  };
+
+  // Produk manual langsung set process_status = success
+  if (order.module === 'manual_app' || order.module === 'nokos' || order.module === 'manual') {
+    updateData.process_status = 'success';
+  }
+
   const { error } = await sb
     .from('orders')
-    .update({
-      payment_status: 'paid',
-      paid_at: new Date().toISOString(),
-      payment_method: 'test_mode',
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq('id', orderId);
 
   if (error) {
