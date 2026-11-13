@@ -38,22 +38,64 @@ export interface CheckoutState {
   error: string | null;
 }
 
+const PENDING_KEY = 'daya_pending_checkout';
+
+/**
+ * Try restore pending payment from sessionStorage.
+ * Returns restored state or null.
+ */
+function restorePending(productName: string | undefined): Partial<CheckoutState> | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(PENDING_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (p.key === productName && p.orderId) {
+      return {
+        step: 'payment' as CheckoutStep,
+        orderId: p.orderId,
+        qrisUrl: p.qrisUrl || null,
+        qrString: p.qrString || null,
+        qrImage: p.qrImage || null,
+        testMode: p.testMode || false,
+        nominal: p.nominal || null,
+        targetInput: p.targetInput || '',
+      };
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+export function clearPendingCheckout() {
+  try { sessionStorage.removeItem(PENDING_KEY); } catch {}
+}
+
 export function useCheckout(product: CheckoutProduct | null) {
-  const [state, setState] = useState<CheckoutState>({
-    step: product?.needs_target ? 'input' : 'nominal',
-    product,
-    targetInput: '',
-    duration: null,
-    nominal: null,
-    quantity: 1,
-    buyerName: '',
-    buyerPhone: '',
-    orderId: null,
-    qrisUrl: null,
-    qrString: null,
-    qrImage: null,
-    testMode: false,
-    error: null,
+  const [state, setState] = useState<CheckoutState>(() => {
+    const base: CheckoutState = {
+      step: product?.needs_target ? 'input' : 'nominal',
+      product,
+      targetInput: '',
+      duration: null,
+      nominal: null,
+      quantity: 1,
+      buyerName: '',
+      buyerPhone: '',
+      orderId: null,
+      qrisUrl: null,
+      qrString: null,
+      qrImage: null,
+      testMode: false,
+      error: null,
+    };
+
+    // Restore pending payment if exists
+    const restored = restorePending(product?.name);
+    if (restored) {
+      return { ...base, ...restored };
+    }
+
+    return base;
   });
 
   const go = (patch: Partial<CheckoutState>) =>
@@ -101,6 +143,21 @@ export function useCheckout(product: CheckoutProduct | null) {
         }
 
         const data = await res.json();
+
+        // Persist to sessionStorage — survives page reload
+        try {
+          sessionStorage.setItem(PENDING_KEY, JSON.stringify({
+            key: product?.name,
+            orderId: data.orderId,
+            qrisUrl: data.qrisUrl,
+            qrString: data.qrString || null,
+            qrImage: data.qrImage || null,
+            testMode: data.testMode || false,
+            nominal: state.nominal,
+            targetInput: state.targetInput,
+          }));
+        } catch { /* ignore */ }
+
         go({ orderId: data.orderId, qrisUrl: data.qrisUrl, qrString: data.qrString || null, qrImage: data.qrImage || null, testMode: data.testMode || false, step: 'payment' });
       } catch {
         go({ error: 'Koneksi gagal. Coba lagi.', step: 'confirm' });
@@ -126,6 +183,7 @@ export function useCheckout(product: CheckoutProduct | null) {
     },
 
     reset() {
+      clearPendingCheckout();
       setState({
         step: product?.needs_target ? 'input' : 'nominal',
         product,

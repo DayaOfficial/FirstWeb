@@ -146,6 +146,17 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, qrImage, testM
     if (status === 'success' && onSuccess) onSuccess();
   }, [status, onSuccess]);
 
+  // Clear sessionStorage when payment reaches terminal state
+  useEffect(() => {
+    if (['success', 'failed', 'expired', 'canceled'].includes(status)) {
+      try {
+        sessionStorage.removeItem('daya_pending_checkout');
+        sessionStorage.removeItem('daya_pending_nokos');
+        sessionStorage.removeItem('daya_pending_apppremium');
+      } catch { /* ignore */ }
+    }
+  }, [status]);
+
   // Auto-expire handler
   const handleAutoExpire = useCallback(async () => {
     if (!orderId) return;

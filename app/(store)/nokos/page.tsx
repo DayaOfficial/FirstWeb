@@ -50,6 +50,21 @@ export default function NokosPage() {
   const [copied, setCopied] = useState(false);
   const [ownerWA, setOwnerWA] = useState('6287800001232');
 
+  // Restore pending payment from sessionStorage on mount
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('daya_pending_nokos');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p.paymentData?.orderId) {
+          setPaymentData(p.paymentData);
+          setSelectedAppId(p.selectedAppId);
+          setSelectedCountryId(p.selectedCountryId);
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   // Load from Supabase
   useEffect(() => {
     const loadData = async () => {
@@ -123,7 +138,7 @@ export default function NokosPage() {
       setCountries(prev => prev.map(c => c.id === selectedCountry.id ? { ...c, stock: newStock } : c));
 
       // Set payment data untuk tampilkan QRIS
-      setPaymentData({
+      const pd = {
         orderId: data.orderId,
         orderCode: data.orderCode,
         qrString: data.qrString || null,
@@ -133,7 +148,17 @@ export default function NokosPage() {
         totalPayment: data.totalPayment || null,
         expiresAt: data.expiresAt || null,
         productName: `Nokos ${selectedApp.name} - ${selectedCountry.countryName}`,
-      });
+      };
+      setPaymentData(pd);
+
+      // Persist to sessionStorage — survives page reload
+      try {
+        sessionStorage.setItem('daya_pending_nokos', JSON.stringify({
+          paymentData: pd,
+          selectedAppId: selectedApp.id,
+          selectedCountryId: selectedCountry.id,
+        }));
+      } catch { /* ignore */ }
 
       setShowConfirm(false);
     } catch {

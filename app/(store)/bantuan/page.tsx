@@ -40,7 +40,8 @@ function getPlatformColor(platform: string) {
 
 export default function BantuanPage() {
   const [faqs, setFaqs] = useState<FAQItem[]>(DEFAULT_FAQS);
-  const [contacts, setContacts] = useState<SocialContact[]>(DEFAULT_CONTACTS);
+  const [contacts, setContacts] = useState<SocialContact[]>([]);
+  const [contactsLoaded, setContactsLoaded] = useState(false);
   const [openIdx, setOpenIdx] = useState<number | null>(0);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -58,14 +59,15 @@ export default function BantuanPage() {
       }
       // jika faqData kosong, tetap pakai DEFAULT_FAQS
 
-      if (contactData && contactData.length > 0) {
+      // Kontak: gunakan data dari DB, jangan fallback ke default
+      if (contactData) {
         setContacts(contactData.map((c: Record<string, unknown>) => ({
           id: c.id as string, platform: c.platform as string, logoUrl: (c.logo_url as string) || '',
           username: c.username as string, link: c.link as string, actionLabel: (c.action_label as string) || 'Chat',
           sortOrder: (c.sort_order as number) || 0, isActive: true
         })));
       }
-      // jika contactData kosong, tetap pakai DEFAULT_CONTACTS
+      setContactsLoaded(true);
     };
     loadData();
   }, []);
@@ -85,8 +87,9 @@ export default function BantuanPage() {
     .filter(c => c.isActive)
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
-  // Find primary WhatsApp for CTA
-  const waContact = activeContacts.find(c => c.platform === 'WhatsApp');
+  // Find primary WhatsApp for CTA — use DB contact, or DEFAULT fallback
+  const waContact = activeContacts.find(c => c.platform === 'WhatsApp')
+    || (contactsLoaded && activeContacts.length === 0 ? DEFAULT_CONTACTS.find(c => c.platform === 'WhatsApp') : null);
 
   return (
     <div className="space-y-10 animate-fade-in">

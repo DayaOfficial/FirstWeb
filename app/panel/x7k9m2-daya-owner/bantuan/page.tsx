@@ -106,8 +106,11 @@ export default function OwnerBantuanPage() {
     setShowFaqModal(false);
   };
 
-  const deleteFaq = (id: string) => {
-    saveFaqs(faqs.filter(f => f.id !== id));
+  const deleteFaq = async (id: string) => {
+    // Actually delete from database
+    const supabase = createClient();
+    await supabase.from('faqs').delete().eq('id', id);
+    setFaqs(faqs.filter(f => f.id !== id));
     setDeleteConfirm(null);
   };
 
@@ -176,8 +179,11 @@ export default function OwnerBantuanPage() {
     setShowContactModal(false);
   };
 
-  const deleteContact = (id: string) => {
-    saveContacts(contacts.filter(c => c.id !== id));
+  const deleteContact = async (id: string) => {
+    // Actually delete from database
+    const supabase = createClient();
+    await supabase.from('social_links').delete().eq('id', id);
+    setContacts(contacts.filter(c => c.id !== id));
     setDeleteConfirm(null);
   };
 

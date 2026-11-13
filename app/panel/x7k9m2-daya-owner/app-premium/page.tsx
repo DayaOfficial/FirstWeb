@@ -273,115 +273,115 @@ export default function AppPremiumOwnerPage() {
 
                   {/* Add plan form */}
                   {planFor === app.id && (
-                    <div className="px-5 pb-3 space-y-2 animate-fade-in">
-                      <div className="flex flex-wrap gap-2 items-end">
-                        <div>
-                          <span className="text-[11px] text-on-surface-variant font-medium block mb-1">Durasi</span>
-                          <select
-                            value={pForm.duration}
-                            onChange={e => setPForm({ ...pForm, duration: e.target.value })}
-                            className="px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
-                          >
-                            {PLAN_DURATIONS.map(d => <option key={d}>{d}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <span className="text-[11px] text-on-surface-variant font-medium block mb-1">Tipe</span>
-                          <select
-                            value={pForm.type}
-                            onChange={e => setPForm({ ...pForm, type: e.target.value })}
-                            className="px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
-                          >
-                            {PLAN_TYPES.map(t => <option key={t}>{t}</option>)}
-                          </select>
-                        </div>
-                        <input
-                          placeholder="Harga (Rp)"
-                          type="number"
-                          value={pForm.price}
-                          onChange={e => setPForm({ ...pForm, price: e.target.value })}
-                          className="w-32 px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
-                        />
-                        <input
-                          placeholder="Stok"
-                          type="number"
-                          value={pForm.stock}
-                          onChange={e => setPForm({ ...pForm, stock: e.target.value })}
-                          className="w-24 px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-on-surface-variant">Preview:</span>
-                        <span className="text-sm font-semibold text-primary">{pForm.duration} {pForm.type}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => addPlan(app.id)}
-                          className="px-4 py-2 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 transition-all"
-                        >
-                          Simpan
-                        </button>
-                        <button
-                          onClick={() => setPlanFor(null)}
-                          className="px-3 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:text-error hover:border-error transition-colors"
-                        >
-                          Batal
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Plans list */}
-                  {isExpanded && appPlans.length > 0 && (
-                    <div className="border-t border-outline-variant/20 divide-y divide-outline-variant/10">
-                      {appPlans.map(p => (
-                        <div key={p.id} className="flex items-center justify-between px-5 py-3 hover:bg-surface-container-low/50 transition-colors">
+                      <div className="px-5 pb-3 space-y-2 animate-fade-in">
+                        <div className="flex flex-wrap gap-2 items-end">
                           <div>
-                            <span className="text-sm font-semibold text-on-surface">{p.plan_name}</span>
-                            <span className="text-sm text-primary font-bold ml-3">
-                              Rp {Number(p.price).toLocaleString('id-ID')}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {/* Stock controls */}
-                            <div className="flex items-center gap-1 bg-surface-container-high rounded-lg px-1.5 py-0.5">
-                              <button
-                                onClick={() => patchPlan(p.id, { stock: Math.max(0, p.stock - 1) })}
-                                className="w-6 h-6 rounded bg-surface-container-lowest border border-outline-variant/30 flex items-center justify-center hover:border-primary transition-colors"
-                              >
-                                <Minus size={10} />
-                              </button>
-                              <span className="text-xs font-bold text-on-surface min-w-[24px] text-center">{p.stock}</span>
-                              <button
-                                onClick={() => patchPlan(p.id, { stock: p.stock + 1 })}
-                                className="w-6 h-6 rounded bg-surface-container-lowest border border-outline-variant/30 flex items-center justify-center hover:border-primary transition-colors"
-                              >
-                                <Plus size={10} />
-                              </button>
-                            </div>
-                            <button
-                              onClick={() => removePlan(p.id)}
-                              className="w-7 h-7 rounded-lg bg-red-50 text-red-500 border border-red-200 flex items-center justify-center hover:bg-red-100 transition-colors"
+                            <span className="text-[11px] text-on-surface-variant font-medium block mb-1">Durasi</span>
+                            <select
+                              value={pForm.duration}
+                              onChange={e => setPForm({ ...pForm, duration: e.target.value })}
+                              className="px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
                             >
-                              <Trash2 size={12} />
-                            </button>
+                              {PLAN_DURATIONS.map(d => <option key={d}>{d}</option>)}
+                            </select>
                           </div>
+                          <div>
+                            <span className="text-[11px] text-on-surface-variant font-medium block mb-1">Tipe</span>
+                            <select
+                              value={pForm.type}
+                              onChange={e => setPForm({ ...pForm, type: e.target.value })}
+                              className="px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
+                            >
+                              {PLAN_TYPES.map(t => <option key={t}>{t}</option>)}
+                            </select>
+                          </div>
+                          <input
+                            placeholder="Harga (Rp)"
+                            type="number"
+                            value={pForm.price}
+                            onChange={e => setPForm({ ...pForm, price: e.target.value })}
+                            className="w-32 px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
+                          />
+                          <input
+                            placeholder="Stok"
+                            type="number"
+                            value={pForm.stock}
+                            onChange={e => setPForm({ ...pForm, stock: e.target.value })}
+                            className="w-24 px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
+                          />
                         </div>
-                      ))}
-                    </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-on-surface-variant">Preview:</span>
+                          <span className="text-sm font-semibold text-primary">{pForm.duration} {pForm.type}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => addPlan(app.id)}
+                            className="px-4 py-2 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 transition-all"
+                          >
+                            Simpan
+                          </button>
+                          <button
+                            onClick={() => setPlanFor(null)}
+                            className="px-3 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:text-error hover:border-error transition-colors"
+                          >
+                            Batal
+                          </button>
+                        </div>
+                      </div>
                   )}
 
-                  {isExpanded && appPlans.length === 0 && (
-                    <div className="border-t border-outline-variant/20 px-5 py-6 text-center text-xs text-on-surface-variant">
-                      Belum ada plan. Klik &quot;+ Plan&quot; untuk menambahkan.
+                      {/* Plans list */}
+                      {isExpanded && appPlans.length > 0 && (
+                        <div className="border-t border-outline-variant/20 divide-y divide-outline-variant/10">
+                          {appPlans.map(p => (
+                            <div key={p.id} className="flex items-center justify-between px-5 py-3 hover:bg-surface-container-low/50 transition-colors">
+                              <div>
+                                <span className="text-sm font-semibold text-on-surface">{p.plan_name}</span>
+                                <span className="text-sm text-primary font-bold ml-3">
+                                  Rp {Number(p.price).toLocaleString('id-ID')}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {/* Stock controls */}
+                                <div className="flex items-center gap-1 bg-surface-container-high rounded-lg px-1.5 py-0.5">
+                                  <button
+                                    onClick={() => patchPlan(p.id, { stock: Math.max(0, p.stock - 1) })}
+                                    className="w-6 h-6 rounded bg-surface-container-lowest border border-outline-variant/30 flex items-center justify-center hover:border-primary transition-colors"
+                                  >
+                                    <Minus size={10} />
+                                  </button>
+                                  <span className="text-xs font-bold text-on-surface min-w-[24px] text-center">{p.stock}</span>
+                                  <button
+                                    onClick={() => patchPlan(p.id, { stock: p.stock + 1 })}
+                                    className="w-6 h-6 rounded bg-surface-container-lowest border border-outline-variant/30 flex items-center justify-center hover:border-primary transition-colors"
+                                  >
+                                    <Plus size={10} />
+                                  </button>
+                                </div>
+                                <button
+                                  onClick={() => removePlan(p.id)}
+                                  className="w-7 h-7 rounded-lg bg-red-50 text-red-500 border border-red-200 flex items-center justify-center hover:bg-red-100 transition-colors"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {isExpanded && appPlans.length === 0 && (
+                        <div className="border-t border-outline-variant/20 px-5 py-6 text-center text-xs text-on-surface-variant">
+                          Belum ada plan. Klik &quot;+ Plan&quot; untuk menambahkan.
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
+                  );
             })}
-          </div>
+                </div>
         </div>
       ))}
-    </div>
-  );
+        </div>
+      );
 }

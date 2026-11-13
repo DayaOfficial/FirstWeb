@@ -61,6 +61,32 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
   const price = selectedPlan?.price || 0;
   const brands = [...new Set(apps.map(a => a.brand || 'Lainnya'))];
 
+  // Restore pending payment from sessionStorage on mount
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('daya_pending_apppremium');
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p.orderId) {
+          // Restore selected app & plan from apps list
+          const app = apps.find(a => a.id === p.selectedAppId);
+          const plan = app?.plans.find(pl => pl.id === p.selectedPlanId);
+          if (app && plan) {
+            setSelectedApp(app);
+            setSelectedPlan(plan);
+            go({
+              orderId: p.orderId,
+              qrString: p.qrString || null,
+              qrImage: p.qrImage || null,
+              testMode: p.testMode || false,
+            });
+            setStep('payment');
+          }
+        }
+      }
+    } catch { /* ignore */ }
+  }, [apps]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // After-payment success state
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [formatText, setFormatText] = useState('');
@@ -351,6 +377,18 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
                 qrImage: data.qrImage || null,
                 testMode: data.testMode || false,
               });
+
+              // Persist to sessionStorage — survives page reload
+              try {
+                sessionStorage.setItem('daya_pending_apppremium', JSON.stringify({
+                  orderId: data.orderId,
+                  qrString: data.qrString || null,
+                  qrImage: data.qrImage || null,
+                  testMode: data.testMode || false,
+                  selectedAppId: selectedApp?.id,
+                  selectedPlanId: selectedPlan?.id,
+                }));
+              } catch { /* ignore */ }
             } catch {
               alert('Gagal: Kesalahan jaringan');
               setStep('confirm');
