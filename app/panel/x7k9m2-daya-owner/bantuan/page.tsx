@@ -31,6 +31,7 @@ export default function OwnerBantuanPage() {
   const [contactAction, setContactAction] = useState('Chat');
   const [contactActive, setContactActive] = useState(true);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [saving, setSaving] = useState(false);
 
   // Delete confirm
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'faq' | 'contact'; id: string } | null>(null);
@@ -53,26 +54,14 @@ export default function OwnerBantuanPage() {
     loadData();
   }, []);
 
-  const saveFaqs = async (data: FAQItem[]) => {
-    setFaqs(data);
+  // Helper: reload FAQs from DB
+  const reloadFaqs = async () => {
     const supabase = createClient();
-    for (const f of data) {
-      await supabase.from('faqs').upsert({
-        id: f.id, question: f.question, answer: f.answer, category: f.category,
-        sort_order: f.sortOrder, is_active: f.isActive
-      });
-    }
-  };
-
-  const saveContacts = async (data: SocialContact[]) => {
-    setContacts(data);
-    const supabase = createClient();
-    for (const c of data) {
-      await supabase.from('social_links').upsert({
-        id: c.id, platform: c.platform, logo_url: c.logoUrl, username: c.username,
-        link: c.link, action_label: c.actionLabel, sort_order: c.sortOrder, is_active: c.isActive
-      });
-    }
+    const { data } = await supabase.from('faqs').select('*').order('sort_order');
+    if (data) setFaqs(data.map((f: Record<string, unknown>) => ({
+      id: f.id as string, question: f.question as string, answer: f.answer as string,
+      category: (f.category as string) || 'Umum', sortOrder: (f.sort_order as number) || 0, isActive: f.is_active as boolean
+    })));
   };
 
   /* ── FAQ CRUD ── */
@@ -88,49 +77,71 @@ export default function OwnerBantuanPage() {
     setShowFaqModal(true);
   };
 
-  const handleSaveFaq = () => {
+  const handleSaveFaq = async () => {
     if (!faqQuestion.trim() || !faqAnswer.trim()) return;
-    if (editingFaq) {
-      saveFaqs(faqs.map(f => f.id === editingFaq.id ? { ...f, question: faqQuestion.trim(), answer: faqAnswer.trim(), category: faqCategory, isActive: faqActive } : f));
-    } else {
-      const newFaq: FAQItem = {
-        id: `faq-${Date.now()}`,
-        question: faqQuestion.trim(),
-        answer: faqAnswer.trim(),
-        category: faqCategory,
-        sortOrder: faqs.length,
-        isActive: faqActive,
-      };
-      saveFaqs([...faqs, newFaq]);
+    setSaving(true);
+    const supabase = createClient();
+
+    try {
+      if (editingFaq) {
+        const { error } = await supabase.from('faqs').update({
+          question: faqQuestion.trim(),
+          answer: faqAnswer.trim(),
+          category: faqCategory,
+          is_active: faqActive,
+        }).eq('id', editingFaq.id);
+        if (error) { alert('Gagal update: ' + error.message); return; }
+      } else {
+        const { error } = await supabase.from('faqs').insert({
+          question: faqQuestion.trim(),
+          answer: faqAnswer.trim(),
+          category: faqCategory,
+          sort_order: faqs.length,
+          is_active: faqActive,
+        });
+        if (error) { alert('Gagal simpan: ' + error.message); return; }
+      }
+
+      await reloadFaqs();
+      setShowFaqModal(false);
+    } finally {
+      setSaving(false);
     }
-    setShowFaqModal(false);
   };
 
   const deleteFaq = async (id: string) => {
-    // Actually delete from database
     const supabase = createClient();
     await supabase.from('faqs').delete().eq('id', id);
     setFaqs(faqs.filter(f => f.id !== id));
     setDeleteConfirm(null);
   };
 
-  const toggleFaqStatus = (id: string) => {
-    saveFaqs(faqs.map(f => f.id === id ? { ...f, isActive: !f.isActive } : f));
+  const toggleFaqStatus = async (id: string) => {
+    const faq = faqs.find(f => f.id === id);
+    if (!faq) return;
+    const supabase = createClient();
+    await supabase.from('faqs').update({ is_active: !faq.isActive }).eq('id', id);
+    await reloadFaqs();
   };
 
-  const moveFaq = (id: string, direction: 'up' | 'down') => {
+  const moveFaq = async (id: string, direction: 'up' | 'down') => {
     const sorted = [...faqs].sort((a, b) => a.sortOrder - b.sortOrder);
     const idx = sorted.findIndex(f => f.id === id);
+    const supabase = createClient();
+
     if (direction === 'up' && idx > 0) {
-      const temp = sorted[idx].sortOrder;
-      sorted[idx].sortOrder = sorted[idx - 1].sortOrder;
-      sorted[idx - 1].sortOrder = temp;
+      const aOrder = sorted[idx].sortOrder;
+      const bOrder = sorted[idx - 1].sortOrder;
+      await supabase.from('faqs').update({ sort_order: bOrder }).eq('id', sorted[idx].id);
+      await supabase.from('faqs').update({ sort_order: aOrder }).eq('id', sorted[idx - 1].id);
     } else if (direction === 'down' && idx < sorted.length - 1) {
-      const temp = sorted[idx].sortOrder;
-      sorted[idx].sortOrder = sorted[idx + 1].sortOrder;
-      sorted[idx + 1].sortOrder = temp;
+      const aOrder = sorted[idx].sortOrder;
+      const bOrder = sorted[idx + 1].sortOrder;
+      await supabase.from('faqs').update({ sort_order: bOrder }).eq('id', sorted[idx].id);
+      await supabase.from('faqs').update({ sort_order: aOrder }).eq('id', sorted[idx + 1].id);
     }
-    saveFaqs(sorted);
+
+    await reloadFaqs();
   };
 
   /* ── Contact CRUD ── */
@@ -156,27 +167,47 @@ export default function OwnerBantuanPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleSaveContact = () => {
+  const handleSaveContact = async () => {
     if (!contactPlatform.trim() || !contactUsername.trim() || !contactLink.trim()) return;
-    if (editingContact) {
-      saveContacts(contacts.map(c => c.id === editingContact.id ? {
-        ...c, platform: contactPlatform.trim(), logoUrl: contactLogo, username: contactUsername.trim(),
-        link: contactLink.trim(), actionLabel: contactAction, isActive: contactActive
-      } : c));
-    } else {
-      const newContact: SocialContact = {
-        id: `sc-${Date.now()}`,
-        platform: contactPlatform.trim(),
-        logoUrl: contactLogo,
-        username: contactUsername.trim(),
-        link: contactLink.trim(),
-        actionLabel: contactAction,
-        sortOrder: contacts.length,
-        isActive: contactActive,
-      };
-      saveContacts([...contacts, newContact]);
+    setSaving(true);
+    const supabase = createClient();
+
+    try {
+      if (editingContact) {
+        const { error } = await supabase.from('social_links').update({
+          platform: contactPlatform.trim(),
+          logo_url: contactLogo,
+          username: contactUsername.trim(),
+          link: contactLink.trim(),
+          action_label: contactAction,
+          is_active: contactActive,
+        }).eq('id', editingContact.id);
+        if (error) { alert('Gagal update: ' + error.message); return; }
+      } else {
+        const { error } = await supabase.from('social_links').insert({
+          platform: contactPlatform.trim(),
+          logo_url: contactLogo,
+          username: contactUsername.trim(),
+          link: contactLink.trim(),
+          action_label: contactAction,
+          sort_order: contacts.length,
+          is_active: contactActive,
+        });
+        if (error) { alert('Gagal simpan: ' + error.message); return; }
+      }
+
+      // Reload from DB to get real IDs
+      const { data } = await supabase.from('social_links').select('*').order('sort_order');
+      if (data) setContacts(data.map((c: Record<string, unknown>) => ({
+        id: c.id as string, platform: c.platform as string, logoUrl: (c.logo_url as string) || '',
+        username: c.username as string, link: c.link as string, actionLabel: (c.action_label as string) || 'Chat',
+        sortOrder: (c.sort_order as number) || 0, isActive: c.is_active as boolean
+      })));
+
+      setShowContactModal(false);
+    } finally {
+      setSaving(false);
     }
-    setShowContactModal(false);
   };
 
   const deleteContact = async (id: string) => {
@@ -334,8 +365,9 @@ export default function OwnerBantuanPage() {
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setShowFaqModal(false)} className="flex-1 py-2.5 rounded-full border border-outline-variant text-sm font-semibold text-on-surface hover:bg-surface-container-high transition-colors">Batal</button>
-              <button onClick={handleSaveFaq} disabled={!faqQuestion.trim() || !faqAnswer.trim()}
-                className="flex-1 py-2.5 rounded-full gradient-primary text-white text-sm font-semibold shadow-md hover:opacity-90 transition-all disabled:opacity-50">Simpan</button>
+              <button onClick={handleSaveFaq} disabled={!faqQuestion.trim() || !faqAnswer.trim() || saving}
+                className="flex-1 py-2.5 rounded-full gradient-primary text-white text-sm font-semibold shadow-md hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                {saving && <Loader2 size={14} className="animate-spin" />}{saving ? 'Menyimpan...' : 'Simpan'}</button>
             </div>
           </div>
         </div>
@@ -405,8 +437,9 @@ export default function OwnerBantuanPage() {
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setShowContactModal(false)} className="flex-1 py-2.5 rounded-full border border-outline-variant text-sm font-semibold text-on-surface hover:bg-surface-container-high transition-colors">Batal</button>
-              <button onClick={handleSaveContact} disabled={!contactPlatform.trim() || !contactUsername.trim() || !contactLink.trim()}
-                className="flex-1 py-2.5 rounded-full gradient-primary text-white text-sm font-semibold shadow-md hover:opacity-90 transition-all disabled:opacity-50">Simpan</button>
+              <button onClick={handleSaveContact} disabled={!contactPlatform.trim() || !contactUsername.trim() || !contactLink.trim() || saving}
+                className="flex-1 py-2.5 rounded-full gradient-primary text-white text-sm font-semibold shadow-md hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                {saving && <Loader2 size={14} className="animate-spin" />}{saving ? 'Menyimpan...' : 'Simpan'}</button>
             </div>
           </div>
         </div>
