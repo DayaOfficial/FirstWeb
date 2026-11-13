@@ -23,8 +23,6 @@ interface Plan {
 }
 
 const APP_CATEGORIES = ['Streaming', 'Musik', 'Editing', 'Edukasi', 'Produktivitas', 'VPN', 'Desain', 'Cloud'];
-const PLAN_DURATIONS = ['7 Hari', '14 Hari', '1 Bulan', '3 Bulan', '6 Bulan', '1 Tahun'];
-const PLAN_TYPES = ['Private', 'Sharing', 'Semi', '1U', '2U', '5U', '8U'];
 
 export default function AppPremiumOwnerPage() {
   const sb = createClient();
@@ -32,7 +30,7 @@ export default function AppPremiumOwnerPage() {
   const [plans, setPlans] = useState<Record<string, Plan[]>>({});
   const [appForm, setAppForm] = useState({ name: '', category: 'Streaming', image_url: '' });
   const [planFor, setPlanFor] = useState<string | null>(null);
-  const [pForm, setPForm] = useState({ duration: '1 Bulan', type: 'Private', price: '', stock: '' });
+  const [pForm, setPForm] = useState({ planName: '', price: '', stock: '' });
   const [expandedApps, setExpandedApps] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -103,15 +101,15 @@ export default function AppPremiumOwnerPage() {
   }
 
   async function addPlan(appId: string) {
+    if (!pForm.planName.trim()) return alert('Nama plan wajib diisi');
     if (!pForm.price) return alert('Harga wajib diisi');
-    const planName = `${pForm.duration} ${pForm.type}`;
     await sb.from('product_plans').insert({
       product_id: appId,
-      plan_name: planName,
+      plan_name: pForm.planName.trim(),
       price: Number(pForm.price),
       stock: Number(pForm.stock || 0),
     });
-    setPForm({ duration: '1 Bulan', type: 'Private', price: '', stock: '' });
+    setPForm({ planName: '', price: '', stock: '' });
     setPlanFor(null);
     load();
   }
@@ -275,25 +273,14 @@ export default function AppPremiumOwnerPage() {
                   {planFor === app.id && (
                       <div className="px-5 pb-3 space-y-2 animate-fade-in">
                         <div className="flex flex-wrap gap-2 items-end">
-                          <div>
-                            <span className="text-[11px] text-on-surface-variant font-medium block mb-1">Durasi</span>
-                            <select
-                              value={pForm.duration}
-                              onChange={e => setPForm({ ...pForm, duration: e.target.value })}
-                              className="px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
-                            >
-                              {PLAN_DURATIONS.map(d => <option key={d}>{d}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <span className="text-[11px] text-on-surface-variant font-medium block mb-1">Tipe</span>
-                            <select
-                              value={pForm.type}
-                              onChange={e => setPForm({ ...pForm, type: e.target.value })}
-                              className="px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
-                            >
-                              {PLAN_TYPES.map(t => <option key={t}>{t}</option>)}
-                            </select>
+                          <div className="flex-1 min-w-[180px]">
+                            <span className="text-[11px] text-on-surface-variant font-medium block mb-1">Nama Plan</span>
+                            <input
+                              placeholder="Contoh: 1 Bulan Private, 7 Hari Sharing..."
+                              value={pForm.planName}
+                              onChange={e => setPForm({ ...pForm, planName: e.target.value })}
+                              className="w-full px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
+                            />
                           </div>
                           <input
                             placeholder="Harga (Rp)"
@@ -310,14 +297,11 @@ export default function AppPremiumOwnerPage() {
                             className="w-24 px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-sm text-on-surface outline-none focus:border-primary"
                           />
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-on-surface-variant">Preview:</span>
-                          <span className="text-sm font-semibold text-primary">{pForm.duration} {pForm.type}</span>
-                        </div>
                         <div className="flex gap-2">
                           <button
                             onClick={() => addPlan(app.id)}
-                            className="px-4 py-2 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 transition-all"
+                            disabled={!pForm.planName.trim() || !pForm.price}
+                            className="px-4 py-2 rounded-lg gradient-primary text-white text-sm font-semibold hover:opacity-90 transition-all disabled:opacity-50"
                           >
                             Simpan
                           </button>

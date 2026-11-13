@@ -42,6 +42,7 @@ export default function BantuanPage() {
   const [faqs, setFaqs] = useState<FAQItem[]>(DEFAULT_FAQS);
   const [contacts, setContacts] = useState<SocialContact[]>([]);
   const [contactsLoaded, setContactsLoaded] = useState(false);
+  const [ownerWA, setOwnerWA] = useState('');
   const [openIdx, setOpenIdx] = useState<number | null>(0);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -67,6 +68,10 @@ export default function BantuanPage() {
           sortOrder: (c.sort_order as number) || 0, isActive: true
         })));
       }
+      // Load owner WA as fallback for CTA
+      const { data: waData } = await supabase.from('settings').select('value').eq('key', 'owner_wa').single();
+      if (waData?.value) setOwnerWA(waData.value);
+
       setContactsLoaded(true);
     };
     loadData();
@@ -87,9 +92,11 @@ export default function BantuanPage() {
     .filter(c => c.isActive)
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
-  // Find primary WhatsApp for CTA — use DB contact, or DEFAULT fallback
+  // Find primary WhatsApp for CTA — use DB contact, or owner_wa fallback
   const waContact = activeContacts.find(c => c.platform === 'WhatsApp')
     || (contactsLoaded && activeContacts.length === 0 ? DEFAULT_CONTACTS.find(c => c.platform === 'WhatsApp') : null);
+
+  const ctaLink = waContact?.link || (ownerWA ? `https://wa.me/${ownerWA.replace(/^0/, '62').replace(/[^0-9]/g, '')}` : '');
 
   return (
     <div className="space-y-10 animate-fade-in">
@@ -182,7 +189,7 @@ export default function BantuanPage() {
       <div className="max-w-3xl mx-auto bg-surface-container-low rounded-2xl p-8 text-center border border-outline-variant/20">
         <h3 className="text-lg font-bold text-on-surface font-[family-name:var(--font-heading)] mb-2">Masih butuh bantuan?</h3>
         <p className="text-sm text-on-surface-variant mb-6">Tim kami siap membantu Anda melalui WhatsApp</p>
-        <a href={waContact?.link || 'https://wa.me/6287800001232'} target="_blank" rel="noopener noreferrer"
+        <a href={ctaLink || '#'} target="_blank" rel="noopener noreferrer"
           className="inline-flex items-center gap-2 px-8 py-3 rounded-full gradient-primary text-white font-semibold text-sm hover:opacity-90 transition-opacity shadow-soft">
           <MessageCircle size={18} />
           Chat WhatsApp

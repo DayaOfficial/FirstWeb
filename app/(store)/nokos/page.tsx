@@ -48,7 +48,7 @@ export default function NokosPage() {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [formatText, setFormatText] = useState('');
   const [copied, setCopied] = useState(false);
-  const [ownerWA, setOwnerWA] = useState('6287800001232');
+  const [ownerWA, setOwnerWA] = useState('');
 
   // Restore pending payment from sessionStorage on mount
   useEffect(() => {
@@ -88,7 +88,7 @@ export default function NokosPage() {
       }
 
       // Load owner WA
-      const { data: waData } = await supabase.from('settings').select('value').eq('key', 'owner_whatsapp').single();
+      const { data: waData } = await supabase.from('settings').select('value').eq('key', 'owner_wa').single();
       if (waData?.value) setOwnerWA(waData.value);
     };
     loadData();
@@ -201,6 +201,7 @@ export default function NokosPage() {
   };
 
   const goToWhatsApp = () => {
+    if (!ownerWA) return;
     const url = `https://wa.me/${ownerWA.replace(/^0/, '62').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(formatText)}`;
     window.open(url, '_blank');
   };
@@ -231,11 +232,13 @@ export default function NokosPage() {
                   className="flex-1 py-3 rounded-full border-2 border-primary text-primary font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary/5 transition-colors">
                   {copied ? <><CheckCircle2 size={16} /> Tersalin!</> : <><Copy size={16} /> Salin Format</>}
                 </button>
-                <button onClick={goToWhatsApp}
-                  className="flex-1 py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2">
-                  <MessageCircle size={16} /> Lanjut ke WhatsApp
-                  <ExternalLink size={14} />
-                </button>
+                {ownerWA && (
+                  <button onClick={goToWhatsApp}
+                    className="flex-1 py-3 rounded-full gradient-primary text-white font-semibold text-sm shadow-md hover:opacity-90 transition-all flex items-center justify-center gap-2">
+                    <MessageCircle size={16} /> Lanjut ke WhatsApp
+                    <ExternalLink size={14} />
+                  </button>
+                )}
               </div>
             </>
           )}

@@ -97,7 +97,7 @@ export default function AppPremiumCheckout({ apps }: AppPremiumCheckoutProps) {
   useEffect(() => {
     (async () => {
       const supabase = createClient();
-      const { data } = await supabase.from('settings').select('value').eq('key', 'owner_whatsapp').single();
+      const { data } = await supabase.from('settings').select('value').eq('key', 'owner_wa').single();
       if (data?.value) setOwnerWA(data.value);
     })();
   }, []);
