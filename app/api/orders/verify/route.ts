@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   // Ambil order
   const { data: order, error: orderErr } = await sb
     .from('orders')
-    .select('id, order_code, amount, payment_status, payment_ref, user_id, meta')
+    .select('id, order_code, amount, payment_status, payment_ref, user_id, meta, module')
     .eq('id', orderId)
     .single();
 
@@ -56,11 +56,18 @@ export async function GET(req: NextRequest) {
 
         if (r.paid) {
           // Tandai lunas di DB
-          await sb.from('orders').update({
+          const updateData: Record<string, any> = {
             payment_status: 'paid',
             paid_at: r.paidAt || new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          }).eq('id', order.id);
+          };
+
+          // Produk manual langsung success
+          if (order.module === 'manual_app' || order.module === 'nokos' || order.module === 'manual') {
+            updateData.process_status = 'success';
+          }
+
+          await sb.from('orders').update(updateData).eq('id', order.id);
 
           return NextResponse.json({ paid: true, payment_status: 'paid' });
         }

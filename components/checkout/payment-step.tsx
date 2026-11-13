@@ -121,18 +121,26 @@ export default function PaymentStep({ orderId, qrisUrl, qrString, qrImage, testM
     return () => clearInterval(t);
   }, [cooldown]);
 
-  // Poll status setiap 5 detik
+  // Poll status setiap 5 detik — gunakan verify API agar aktif cek ke NPay
   useEffect(() => {
     if (!orderId || status !== 'waiting') return;
     const poll = setInterval(async () => {
       try {
-        const res = await fetch(`/api/orders/status?orderId=${orderId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.payment_status === 'paid') setStatus('success');
-          else if (data.payment_status === 'failed') setStatus('failed');
-          else if (data.payment_status === 'expired') setStatus('expired');
-          else if (data.payment_status === 'canceled') setStatus('canceled');
+        // Pertama cek DB status (cepat)
+        const statusRes = await fetch(`/api/orders/status?orderId=${orderId}`);
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          if (statusData.payment_status === 'paid') { setStatus('success'); return; }
+          if (statusData.payment_status === 'failed') { setStatus('failed'); return; }
+          if (statusData.payment_status === 'expired') { setStatus('expired'); return; }
+          if (statusData.payment_status === 'canceled') { setStatus('canceled'); return; }
+        }
+
+        // Jika masih pending, aktif cek ke NPay via verify
+        const verifyRes = await fetch(`/api/orders/verify?orderId=${orderId}`);
+        if (verifyRes.ok) {
+          const verifyData = await verifyRes.json();
+          if (verifyData.paid) { setStatus('success'); return; }
         }
       } catch {
         // ignore polling errors

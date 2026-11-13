@@ -107,13 +107,21 @@ export async function POST(req: Request) {
   }
 
   // Tandai sebagai paid
+  const updateData: Record<string, any> = {
+    payment_status: 'paid',
+    paid_at: paid_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  // Untuk produk manual (nokos, app_premium, manual_app), langsung set process_status = success
+  // karena tidak ada proses otomatis — owner akan memproses secara manual setelah melihat pesanan
+  if (order.module === 'manual_app' || order.module === 'nokos' || order.module === 'manual') {
+    updateData.process_status = 'success';
+  }
+
   const { error: updateErr } = await sb
     .from('orders')
-    .update({
-      payment_status: 'paid',
-      paid_at: paid_at || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq('id', order.id);
 
   if (updateErr) {
